@@ -22,7 +22,7 @@ export class AuthService {
         if (user && bcrypt.compare(password, user.password)) {
 
             const { password, ...result } = user
-
+            console.log('result___ ', result)
             return result;
 
         }
@@ -39,8 +39,9 @@ export class AuthService {
 
         if (!user) throw new UnauthorizedException('Invalid credencials');
 
-        const payload = { email: user.email, sub: user.id }
-
+        const payload = user.role === 'agente'
+            ? { email: user.email, sub: user.id, username: user.username, role: user.role, sigla: user.sigla }
+            : { email: user.email, sub: user.id, username: user.username, role: user.role };
         return {
             access_token: this.jwtService.sign(payload)
         }

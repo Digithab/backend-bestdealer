@@ -9,10 +9,10 @@ export class UsersController {
         private readonly UsersService: UsersService
     ) { }
 
-    // @Post()
-    // create(@Body() createUserDto: CreateUserDto) {
-    //     return this.UsersService.create(createUserDto);
-    // }
+    @Post('singup')
+    create(@Body() createUserDto: any) {
+        return this.UsersService.singup(createUserDto);
+    }
 
     // @Get()
     // findAll() {

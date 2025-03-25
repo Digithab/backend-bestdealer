@@ -1,0 +1,31 @@
+{
+    "extend": "21116",
+    "Veicoli": {
+        "targa": "XXXXXX",
+        "marca_select": "m__1",
+        "modello_select": "m__1",
+        "tipo": "1",
+        "cilindrata": "1231",
+        "km": "123",
+        "immatricolazione": "2024-10-24",
+        "reimmatricolazione": "0",
+        "targa_originaria": "0",
+        "prima_immatricolazione": "1900-01-01",
+        "alimentazione": "4",
+        "cambio": "2",
+        "trazione": "2",
+        "codice_qr": ""
+    },
+    "Clienti": {
+        "tipo_persona": "0",
+        "denominazione": "DASD",
+        "comune": "3421",
+        "prov": "CH",
+        "cap": "66010",
+        "frazione": "",
+        "indirizzo": "SDASDASD",
+        "civico": "",
+        "cellulare": "123123123",
+        "email": ""
+    }
+}

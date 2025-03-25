@@ -9,8 +9,9 @@ export const AgentiSearchKeys = [
   'tipo_persona',
   'denominazione',
   'cellulare',
+  'telefono',
   'cap',
-  'nomecomune',
+  'comuni',
   'provincia',
   'indirizzo',
   'zona',
@@ -67,7 +68,9 @@ export class AgentiService {
     const query = this.entityManager.createQueryBuilder()
       .select('ag.*, co.citta as comuni, co.provincia as prov')
       .from('agenti', 'ag')
-      .innerJoin('comuni', 'co', 'ag.comune = co.id');
+      .innerJoin('comuni', 'co', 'ag.comune = co.id')
+      .orderBy(`ag.sigla`, 'ASC');
+
 
     this.applyFilters(query, search);
 
@@ -92,19 +95,13 @@ export class AgentiService {
 
 
   async findOne(id: number) {
+    const [data] = await this.dataSource.query(
+      `SELECT *, c.provincia FROM agenti g
+        JOIN comuni c ON g.comune = c.id
+        WHERE g.id = ?`, [id]
+    );
 
-    const query = this.entityManager.createQueryBuilder()
-      .select('ag.*')
-      .from('agenti', 'ag')
-      .where('ag.id = :id', { id })
-
-    const agenti = await query.getRawOne()
-
-    if (!agenti) {
-      throw new NotFoundException(`Agenti with ID ${id} not found`);
-    }
-
-    return agenti;
+    return data
   }
 
   async update(id: number, updateAgentiDto: any): Promise<any> {
@@ -161,6 +158,19 @@ export class AgentiService {
 
   }
 
+  type(value: string) {
+    switch (value) {
+      case 'Fisica':
+        return '0'
+        break;
+      case 'Giuridica':
+        return '1'
+        break;
+      default:
+      // code block
+    }
+  }
+
   applyFilters(query: SelectQueryBuilder<any>, search: AgentiSearch): void {
     // Lista de campos válidos para filtrar (excluyendo page y limit)
     const validFields = Object.keys(search).filter(key => !['page', 'limit', 'sort', 'order'].includes(key));
@@ -168,7 +178,11 @@ export class AgentiService {
     validFields.forEach(key => {
       const value = search[key];
       if (value !== undefined && value !== null && value !== '') {
-        if (typeof value === 'string') {
+        if (key === 'tipo_persona' && value !== undefined) {
+          query.andWhere(`ag.tipo_persona = :${key}`, { [key]: this.type(value) });
+        }
+
+        if (typeof value === 'string' && key !== 'tipo_persona') {
           query.andWhere(`ag.${key} LIKE :${key}`, { [key]: `%${value}%` });
         } else if (typeof value === 'number') {
           query.andWhere(`ag.${key} = :${key}`, { [key]: value });

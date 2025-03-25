@@ -1,12 +1,10 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseFilters, ValidationPipe, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseFilters, ValidationPipe, NotFoundException, UseGuards } from '@nestjs/common';
 import { ClientiService } from './clienti.service';
-import { CreateClientiDto } from './dto/create-clienti.dto';
-import { UpdateClientiDto } from './dto/update-clienti.dto';
 import { Clienti } from './interface/clienti.interface';
 import { IsInt, IsPositive } from 'class-validator';
 import { Transform } from 'class-transformer';
-import { HttpExceptionFilter } from 'src/filters/http-exception.filter';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 class IdParam {
   @IsInt()
@@ -17,12 +15,12 @@ class IdParam {
 
 @ApiTags('Clienti')
 @Controller('clienti')
-@UseFilters(new HttpExceptionFilter())
+@UseGuards(JwtAuthGuard) // Asegúrate de proteger estas rutas
 export class ClientiController {
   constructor(private readonly clientiService: ClientiService) { }
 
   @Post()
-  create(@Body() createClientiDto: CreateClientiDto) {
+  create(@Body() createClientiDto: any) {
     return this.clientiService.create(createClientiDto);
   }
 
@@ -65,7 +63,7 @@ export class ClientiController {
   @Patch(':id')
   async update(
     @Param(ValidationPipe) { id }: IdParam,
-    @Body(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true })) updateClientiDto: UpdateClientiDto
+    @Body(new ValidationPipe({ whitelist: false, forbidNonWhitelisted: false })) updateClientiDto: any
   ) {
     const clienti = this.clientiService.update(+id, updateClientiDto)
 

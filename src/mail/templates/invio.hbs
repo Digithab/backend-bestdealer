@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+        }
+
+        .product-line {
+            line-height: 1.7rem;
+            margin: 5px 0;
+        }
+
+        .contact-info {
+            margin-top: 20px;
+        }
+
+        .logo {
+            margin: 20px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <p><b>Spett.le Cliente,</b></p>
+
+    <p>
+        Di seguito riportiamo la disponibilità di garanzie rimanenti al {{fecha}} dai pacchetti acquistati:
+    </p>
+
+    <div class="product-line">
+        {{#each productos}}
+        <u style="color: {{this.colorClass}}">
+            <b>{{this.denominazione}}</b>: <span>{{this.cantidad}}</span> rimanenti<br>
+        </u>
+        {{/each}}
+    </div>
+
+    <p>Cordiali Saluti / Kind Regards</p>
+
+    <div class="logo">
+        <img src="cid:logo" alt="Logo">
+    </div>
+
+    <div class="contact-info">
+        <p>
+            BEST DEALER SRLS<br>
+            PIAZZA DON LUIGI STURZO, 15 int. 3 - 00144 ROMA<br>
+            P.I. 13921591007<br>
+            Tel. <a href="tel:0681152274">06 81152274</a> - Fax <a href="tel:0681152276">06 81152276</a>
+        </p>
+
+        <p>
+            <a href="mailto:amministrazione@bestdealer.it">Invia una email</a>
+        </p>
+    </div>
+</body>
+
+</html>

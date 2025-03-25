@@ -1,0 +1,345 @@
+/* #region Impostazioni principali layout */
+
+div.page {
+    width: 192mm;
+    height: 280mm;
+    font-family: Arial, Helvetica, sans-serif !important;
+}
+
+div.row {
+    display: block;
+    margin-bottom: 1mm;
+}
+
+table {
+    margin: 0 -0.5mm;
+    width: 100%;
+    font-family: Arial, Helvetica, sans-serif;
+    border-spacing: 4px;
+}
+
+td {
+    vertical-align: top;
+}
+
+td.v-middle {
+    vertical-align: middle;
+}
+
+.w-100 {
+    width: 100%;
+}
+
+p,
+ol {
+    margin-top: 0;
+    margin-bottom: 1.8mm;
+    line-height: 1.26em;
+}
+
+/* #endregion */
+
+/* #region Elementi comuni */
+div.heading-copia {
+    border: 0.5mm solid #bbbbbb;
+    background: #dddddd;
+    height: 7mm;
+    font-size: 12pt;
+    vertical-align: baseline;
+    font-weight: normal;
+    padding: 0 3mm;
+    margin-bottom: 2mm;
+}
+
+.line {
+    height: 0.7mm;
+    background: #969696;
+}
+
+tr.col-2 td {
+    width: 50%;
+}
+
+tr.col-3 td {
+    width: 33.33%;
+}
+
+.footer {
+    position: absolute;
+    text-align: center;
+    width: 182mm;
+    bottom: 1.5cm;
+    font-family: Arial, Helvetica, sans-serif !important;
+}
+
+table.small {
+    width: 30%;
+}
+
+table.noborder {
+    border-spacing: 0;
+}
+
+/* #region Margini e padding */
+
+.w-50 {
+    width: 50%;
+}
+
+.mb-0 {
+    margin-bottom: 0;
+}
+
+.mt-0 {
+    margin-top: 0;
+}
+
+.mt-8 {
+    margin-top: 8mm;
+}
+
+.mt-40 {
+    margin-top: 40mm;
+}
+
+.ml-35 {
+    margin-left: 35mm;
+}
+
+.pt-1 {
+    padding-top: 1mm;
+}
+
+.pt-8 {
+    padding-top: 8mm;
+}
+
+.pt-10 {
+    padding-top: 10mm;
+}
+
+.pl-2 {
+    padding-left: 2mm;
+}
+
+.pl-4 {
+    padding-left: 4mm;
+}
+
+.pl-10 {
+    padding-left: 10mm;
+}
+
+.pd-3 {
+    padding: 3mm;
+}
+
+/* #endregion */
+
+/* #region Utility colori di sfondo */
+.bg-yellow {
+    background: #ffffb7;
+}
+
+.bg-grey {
+    background: #e0e0e0;
+}
+
+/* #endregion */
+
+/* #region Utility testo */
+.align-center {
+    text-align: center;
+}
+
+.align-right {
+    text-align: right;
+}
+
+.align-left {
+    text-align: left;
+}
+
+.align-justify {
+    text-align: justify;
+}
+
+.txt-4 {
+    font-size: 4pt;
+}
+
+.txt-6 {
+    font-size: 6pt;
+}
+
+.txt-7-0 {
+    font-size: 7pt;
+    line-height: 1.2em;
+}
+
+.txt-7 {
+    font-size: 7.4pt;
+}
+
+.txt-8 {
+    font-size: 8pt;
+}
+
+.txt-9 {
+    font-size: 9pt;
+}
+
+.txt-12 {
+    font-size: 12pt;
+}
+
+.txt-13 {
+    font-size: 13pt;
+}
+
+.txt-14 {
+    font-size: 14pt;
+}
+
+.txt-18 {
+    font-size: 18pt;
+}
+
+.lh-1-5 {
+    line-height: 1.5em;
+}
+
+/* #endregion */
+
+/* #region Utility bordi */
+
+table.no-spacing {
+    border-spacing: 0 0;
+}
+
+.border-black {
+    border: 0.5mm solid black;
+}
+
+.border-black-top {
+    border-top: 0.5mm solid black;
+    border-left: 0.5mm solid black;
+    border-right: 0.5mm solid black;
+}
+
+.border-black-bottom {
+    border-left: 0.5mm solid black;
+    border-right: 0.5mm solid black;
+    border-bottom: 0.5mm solid black;
+}
+
+.border-blue {
+    border: 0.5mm solid blue;
+}
+
+.firma-field {
+    height: 15mm;
+    border-bottom: 0.5mm solid black;
+}
+
+/* #endregion */
+
+/* #region Utility spazio */
+
+.v-spacer {
+    height: 15mm;
+}
+
+/* #endregion */
+
+/* #endregion */
+
+/* #region Elementi in prima pagina */
+img#logo {
+    height: 13mm;
+}
+
+img#logo_big {
+    width: 90mm;
+}
+
+img.cardss {
+    height: 5cm;
+    width: auto;
+}
+
+.cliente {
+    vertical-align: bottom;
+}
+
+div.contatti-dealer {
+    padding: 2mm 0;
+}
+
+div.tipo-garanzia img {
+    max-height: 50px;
+}
+
+/* #endregion */
+
+/* #region Elementi proforma e fattura */
+
+div.row.corpo-proforma table {
+    border-collapse: collapse;
+}
+
+div.row.corpo-proforma table thead tr td {
+    padding-top: 1mm;
+    padding-bottom: 1mm;
+    font-weight: bold;
+}
+
+div.row.corpo-proforma table tbody tr td {
+    padding-top: 2mm;
+    padding-bottom: 2mm;
+}
+
+div.row.corpo-proforma table tbody tr:nth-child(even) td {
+    background: #f0f0f0;
+}
+
+div.row.corpo-proforma table tr td:nth-child(2) {
+    width: 25mm;
+}
+
+div.row.corpo-proforma table tr td:nth-child(3) {
+    width: 20mm;
+}
+
+div.row.corpo-proforma table tr td:nth-child(4) {
+    width: 30mm;
+    font-weight: bold;
+}
+
+div.row.corpo-proforma table tfoot tr td {
+    padding-top: 4mm;
+}
+
+div.row.corpo-proforma table tr.tot-lordo-row td {
+    background: #FFFFFF;
+    padding-top: 5mm;
+    padding-bottom: 5mm;
+}
+
+div.row.scadenze-proforma {
+    margin-top: 5mm;
+}
+
+div.row.scadenze-proforma p {
+    font-weight: bold;
+    padding: 1mm 0;
+}
+
+/* #endregion */
+
+div.page.preventivo {
+    background-repeat: no-repeat;
+    background-size: contain;
+    background-image: url("images/preventivo.png");
+    background-position: center;
+}

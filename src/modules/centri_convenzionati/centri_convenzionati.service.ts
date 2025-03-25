@@ -39,7 +39,19 @@ export class CentriConvenzionatiService {
   async create(createCentriConvenzionatiDto: any): Promise<any> {
 
     try {
-      return await this.entityManager.insert('centri_convenzionati', createCentriConvenzionatiDto)
+      const { tipi, ...newValue } = createCentriConvenzionatiDto
+      const result = await this.entityManager.insert('centri_convenzionati', newValue)
+
+      for (let tp of tipi) {
+
+        const data = {
+          centro: result.raw?.insertId,
+          tipo: tp,
+          attivo: 1
+        }
+        await this.entityManager.insert('centri_convenzionati__assoc__tipi', data);
+      }
+      console.log('Proceso realizado')
 
     } catch (error) {
 
@@ -51,7 +63,7 @@ export class CentriConvenzionatiService {
   }
 
 
-  async getAgenti(
+  async getOffina(
     search: Officine = {},
     page: number = 1,
     limit: number = 20,
@@ -94,25 +106,119 @@ export class CentriConvenzionatiService {
       .select('ce.*')
       .from('centri_convenzionati', 'ce')
       .where('ce.is_deleted = 0')
-      .andWhere('ce.id = :id', { id })
+      .andWhere('ce.id = :id', { id });
 
-    const Officine = await query.getRawOne();
+    const tipiQuery = this.entityManager.createQueryBuilder()
+      .select('ccat.tipo')
+      .from('centri_convenzionati__assoc__tipi', 'ccat')
+      .where('ccat.centro = :id', { id })
+      .andWhere('ccat.attivo = 1')
+
+    const [Officine, tipi] = await Promise.all([
+      query.getRawOne(),
+      tipiQuery.getRawMany()
+    ]);
 
     if (!Officine) {
-      throw new NotFoundException(`Clienti with ID ${id} not found`)
+      throw new NotFoundException(`Clienti with ID ${id} not found`);
     }
 
-    return Officine
+    return {
+      ...Officine,
+      tipi: tipi.map(t => t.tipo)
+    };
   }
+
+  async getOfficina() {
+    const query = this.entityManager.createQueryBuilder()
+      .select('DISTINCT c.regione')
+      .from('comuni', 'c')
+      .leftJoin('centri_convenzionati', 'ce', 'ce.comune = c.id')
+      .orderBy('c.regione', 'ASC')
+
+
+    const regioni = await query.getRawMany();
+    console.log('regioni___ ', regioni);
+    return regioni;
+  }
+
+  async dataOfficina() {
+    const officina = await this.getOfficina();
+    const result = [];
+
+    for (const off of officina) {
+      const data = await this.entityManager.createQueryBuilder()
+        .select([
+          'ce.id as id',
+          'ce.nome as nome',
+          'ce.indirizzo as indirizzo',
+          'ce.cap as cap',
+          'ce.telefono as telefono',
+          'ce.email as email',
+          'co.citta as citta',
+          'co.provincia as provincia',
+        ])
+        .from('centri_convenzionati', 'ce')
+        .leftJoin('comuni', 'co', 'ce.comune = co.id')
+        .where('ce.is_deleted in (0)')
+        .andWhere('co.regione LIKE :regione', { regione: `%${off.regione}%` })
+        .orderBy('co.provincia', 'ASC')
+        .getRawMany();
+
+      let tipos
+      if (data.length > 0) {
+        // Obtener los tipos y transformarlos
+        const tipoQuery = await this.entityManager.createQueryBuilder()
+          .select('DISTINCT cct.descrizione as descrizione')
+          .from('centri_convenzionati__tipi', 'cct')
+          .leftJoin('centri_convenzionati__assoc__tipi', 'ccat', 'cct.id = ccat.tipo')
+          .where('ccat.centro = :id', { id: data[0].id })
+          .getRawMany();
+
+        // Extraer solo los valores de descripción
+        tipos = tipoQuery.map(t => t.descrizione);
+      }
+      data.forEach(d => d.tipo = tipos);
+      result.push({
+        regione: off.regione,
+        count: data.length === 0 ? 0 : data.length,
+        data: data,
+      });
+
+    }
+    return result;
+  }
+
+
 
   async update(id: number, updateCentriConvenzionatiDto: any): Promise<any> {
 
+    const { tipi, commento, ...updateCentriConvenzionati } = updateCentriConvenzionatiDto
+    console.log('updateCentriConvenzionati___ ', updateCentriConvenzionati);
+    console.log('id____', id)
     const result = await this.dataSource
       .createQueryBuilder()
       .update('centri_convenzionati')
-      .set(updateCentriConvenzionatiDto)
-      .where("id = :id", { id })
+      .set(updateCentriConvenzionati)
+      .where('id = :id', { id })
       .execute();
+
+    await this.dataSource
+      .createQueryBuilder()
+      .update('centri_convenzionati__assoc__tipi')
+      .set({ attivo: 0 })
+      .where("centro = :centro", { centro: id })
+      .execute();
+
+    for (let tp of tipi) {
+
+      const data = {
+        centro: id,
+        tipo: tp,
+        attivo: 1
+      }
+      await this.entityManager.insert('centri_convenzionati__assoc__tipi', data);
+    }
 
     if (result.affected === 0) {
 
@@ -150,7 +256,17 @@ export class CentriConvenzionatiService {
     validFields.forEach(key => {
       const value = search[key];
       if (value !== undefined && value !== null && value !== '') {
-        if (typeof value === 'string') {
+        console.log('value: ', value)
+        console.log('key: ', key)
+        if (key === 'comuni' && value !== undefined) {
+          query.andWhere(`co.citta LIKE :${key}`, { [key]: `%${value}%` });
+        }
+
+        if (key === 'prov') {
+          query.andWhere(`co.provincia LIKE :${key}`, { [key]: `%${value}%` });
+        }
+
+        if (typeof value === 'string' && key !== 'comuni' && key !== 'prov') {
           query.andWhere(`ce.${key} LIKE :${key}`, { [key]: `%${value}%` });
         } else if (typeof value === 'number') {
           query.andWhere(`ce.${key} = :${key}`, { [key]: value });

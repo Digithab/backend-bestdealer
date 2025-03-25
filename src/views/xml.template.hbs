@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<q1:FatturaElettronica versione="FPR12" xmlns:q1="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2">
+    <FatturaElettronicaHeader>
+        <DatiTrasmissione>
+            <IdTrasmittente>
+                <IdPaese>IT</IdPaese>
+                <IdCodice>13921591007</IdCodice>
+            </IdTrasmittente>
+            <ProgressivoInvio>{{formatHex fattura.prog_invio 5}}</ProgressivoInvio>
+            <FormatoTrasmissione>FPR12</FormatoTrasmissione>
+            <CodiceDestinatario>{{cliente.cod_univoco}}</CodiceDestinatario>
+            {{#if cliente.pec}}
+            <PECDestinatario>{{cliente.pec}}</PECDestinatario>
+            {{/if}}
+        </DatiTrasmissione>
+        <CedentePrestatore>
+            <DatiAnagrafici>
+                <IdFiscaleIVA>
+                    <IdPaese>IT</IdPaese>
+                    <IdCodice>13921591007</IdCodice>
+                </IdFiscaleIVA>
+                <CodiceFiscale>13921591007</CodiceFiscale>
+                <Anagrafica>
+                    <Denominazione>BESTDEALER srls</Denominazione>
+                </Anagrafica>
+                <RegimeFiscale>RF01</RegimeFiscale>
+            </DatiAnagrafici>
+            <Sede>
+                <Indirizzo>Piazza DON LUIGI STURZO 15 int.3</Indirizzo>
+                <CAP>00144</CAP>
+                <Comune>ROMA</Comune>
+                <Provincia>RM</Provincia>
+                <Nazione>IT</Nazione>
+            </Sede>
+            <Contatti>
+                <Email>amministrazione@bestdealer.it</Email>
+            </Contatti>
+        </CedentePrestatore>
+        <CessionarioCommittente>
+            <DatiAnagrafici>
+                {{#if (isPartitaIVA cliente.partita_iva)}}
+                <IdFiscaleIVA>
+                    <IdPaese>IT</IdPaese>
+                    <IdCodice>{{cliente.partita_iva}}</IdCodice>
+                </IdFiscaleIVA>
+                {{else}}
+                <CodiceFiscale>{{cliente.partita_iva}}</CodiceFiscale>
+                {{/if}}
+                <Anagrafica>
+                    <Denominazione>{{cliente.rag_sociale}}</Denominazione>
+                </Anagrafica>
+            </DatiAnagrafici>
+            <Sede>
+                <Indirizzo>{{cliente.indirizzo}}</Indirizzo>
+                {{#if cliente.civico}}
+                <NumeroCivico>{{cliente.civico}}</NumeroCivico>
+                {{/if}}
+                <CAP>{{cliente.cap}}</CAP>
+                <Comune>{{cliente.citta}}</Comune>
+                <Provincia>{{cliente.provincia}}</Provincia>
+                <Nazione>IT</Nazione>
+            </Sede>
+        </CessionarioCommittente>
+    </FatturaElettronicaHeader>
+    <FatturaElettronicaBody>
+        <DatiGenerali>
+            <DatiGeneraliDocumento>
+                <TipoDocumento>{{fattura.tipo_fattura}}</TipoDocumento>
+                <Divisa>EUR</Divisa>
+                <Data>{{fattura.data_orig}}</Data>
+                <Numero>FPR {{fattura.num_fattura}}</Numero>
+                <ImportoTotaleDocumento>{{formatNumber fattura.tot_dovuto 2}}</ImportoTotaleDocumento>
+                {{#if (eq fattura.tipo_fattura 'TD04')}}
+                <Causale>Nota Credito</Causale>
+                {{/if}}
+            </DatiGeneraliDocumento>
+        </DatiGenerali>
+        <DatiBeniServizi>
+            {{#each fattura.corpo}}
+            <DettaglioLinee>
+                <NumeroLinea>{{inc @index}}</NumeroLinea>
+                <Descrizione>{{descrizione}}</Descrizione>
+                <Quantita>{{quantita}}.00</Quantita>
+                <UnitaMisura>NR</UnitaMisura>
+                <PrezzoUnitario>{{formatNumber prezzo_unitario_orig 2}}</PrezzoUnitario>
+                <PrezzoTotale>{{formatNumber totale_orig 2}}</PrezzoTotale>
+                <AliquotaIVA>22.00</AliquotaIVA>
+            </DettaglioLinee>
+            {{/each}}
+
+            {{#if (and (eq fattura.tipo_fattura 'TD01') fattura.rif_acconti)}}
+            {{#each fattura.rif_acconti}}
+            <DettaglioLinee>
+                <NumeroLinea>{{inc (add ../fattura.corpo.length @index)}}</NumeroLinea>
+                <Descrizione>{{descrizione}}</Descrizione>
+                <Quantita>1.00</Quantita>
+                <UnitaMisura>NR</UnitaMisura>
+                <PrezzoUnitario>-{{formatNumber detrazione 2}}</PrezzoUnitario>
+                <PrezzoTotale>-{{formatNumber detrazione 2}}</PrezzoTotale>
+                <AliquotaIVA>22.00</AliquotaIVA>
+            </DettaglioLinee>
+            {{/each}}
+            {{/if}}
+
+            <DatiRiepilogo>
+                <AliquotaIVA>22.00</AliquotaIVA>
+                <ImponibileImporto>{{formatNumber (multiply fattura.tot_dovuto 0.8196721311) 2}}</ImponibileImporto>
+                <Imposta>{{formatNumber (subtract fattura.tot_dovuto (multiply fattura.tot_dovuto 0.8196721311)) 2}}
+                </Imposta>
+            </DatiRiepilogo>
+        </DatiBeniServizi>
+        <DatiPagamento>
+            <CondizioniPagamento>{{#if (eq fattura.tipo_fattura 'TD02')}}TP03{{else}}TP02{{/if}}</CondizioniPagamento>
+            <DettaglioPagamento>
+                <Beneficiario>BESTDEALER SRLS</Beneficiario>
+                <ModalitaPagamento>MP05</ModalitaPagamento>
+                <DataScadenzaPagamento>{{fattura.data_orig}}</DataScadenzaPagamento>
+                <ImportoPagamento>{{formatNumber fattura.tot_dovuto 2}}</ImportoPagamento>
+                <IstitutoFinanziario>UNICREDIT</IstitutoFinanziario>
+                <IBAN>IT02L0200839152000104373563</IBAN>
+            </DettaglioPagamento>
+        </DatiPagamento>
+    </FatturaElettronicaBody>
+</q1:FatturaElettronica>

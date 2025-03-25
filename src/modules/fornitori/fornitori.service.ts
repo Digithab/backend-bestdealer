@@ -29,10 +29,10 @@ export class FornitoriService {
     @InjectDataSource() private dataSource: DataSource
 
   ) { }
-  async create(createFornitoriDto: CreateFornitoriDto): Promise<any> {
+  async create(createFornitoriDto: any): Promise<any> {
     try {
-
-      return await this.entityManager.insert('fornitori', createFornitoriDto)
+      const { prov, ...newDto } = createFornitoriDto
+      return await this.entityManager.insert('fornitori', newDto)
 
     } catch (error) {
 
@@ -101,7 +101,7 @@ export class FornitoriService {
     return data
   }
 
-  async update(id: number, updateFornitoriDto: UpdateFornitoriDto): Promise<any> {
+  async update(id: number, updateFornitoriDto: any): Promise<any> {
     try {
 
       const result = await this.dataSource
@@ -151,6 +151,25 @@ export class FornitoriService {
     return `Delete complete`;
   }
 
+  type(value: string) {
+    switch (value) {
+      case 'Non Specificato':
+        return '0'
+        break;
+      case 'Ricambista':
+        return '1'
+        break;
+      case 'Autodemolizione':
+        return '2'
+        break;
+      case 'Venditore Online':
+        return '3'
+        break;
+      default:
+      // code block
+    }
+  }
+
   applyFilters(query: SelectQueryBuilder<any>, search: Fornitori): void {
     // Lista de campos válidos para filtrar (excluyendo page y limit)    
     const validFields = Object.keys(search).filter(key => !['page', 'limit', 'sort', 'order'].includes(key));
@@ -158,7 +177,20 @@ export class FornitoriService {
     validFields.forEach(key => {
       const value = search[key];
       if (value !== undefined && value !== null && value !== '') {
-        if (typeof value === 'string') {
+
+        if (key === 'comuni' && value !== undefined) {
+          query.andWhere(`co.citta LIKE :${key}`, { [key]: `%${value}%` });
+        }
+
+        if (key === 'prov') {
+          query.andWhere(`co.provincia LIKE :${key}`, { [key]: `%${value}%` });
+        }
+
+        if (key === 'tipo_fornitore' && value !== undefined) {
+          query.andWhere(`f.tipo_fornitore = :${key}`, { [key]: this.type(value) });
+        }
+
+        if (typeof value === 'string' && key !== 'comuni' && key !== 'prov' && key !== 'tipo_fornitore') {
           query.andWhere(`f.${key} LIKE :${key}`, { [key]: `%${value}%` });
         } else if (typeof value === 'number') {
           query.andWhere(`f.${key} = :${key}`, { [key]: value });

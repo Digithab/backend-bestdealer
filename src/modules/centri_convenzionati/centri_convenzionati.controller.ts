@@ -1,10 +1,11 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, ValidationPipe, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, ValidationPipe, NotFoundException, UseGuards } from '@nestjs/common';
 import { CentriConvenzionatiService } from './centri_convenzionati.service';
 import { UpdateCentriConvenzionatiDto } from './dto/update-centri_convenzionati.dto';
 import { IsInt, IsPositive } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Officine } from './interface/officine.interface';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 class IdParam {
   @IsInt()
@@ -15,6 +16,7 @@ class IdParam {
 
 @ApiTags('Officine Convenzionate')
 @Controller('centri-convenzionati')
+@UseGuards(JwtAuthGuard) // Asegúrate de proteger estas rutas
 export class CentriConvenzionatiController {
   constructor(private readonly centriConvenzionatiService: CentriConvenzionatiService) { }
 
@@ -29,14 +31,14 @@ export class CentriConvenzionatiController {
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'sort', required: false, type: String })
   @ApiQuery({ name: 'order', required: false, enum: ['ASC', 'DESC'] })
-  async getAgenti(
+  async getOffina(
     @Query() search: Officine,
     @Query('page') page: number,
     @Query('limit') limit: number,
     @Query('sort') sort?: string,
     @Query('order') order?: 'ASC' | 'DESC'
   ) {
-    const { officine, total } = await this.centriConvenzionatiService.getAgenti(search, page, limit, sort, order);
+    const { officine, total } = await this.centriConvenzionatiService.getOffina(search, page, limit, sort, order);
 
     return {
       data: officine,
@@ -45,6 +47,16 @@ export class CentriConvenzionatiController {
       limit: limit,
       totalPages: Math.ceil(total / limit)
     };
+  }
+
+  @Get('officina')
+  async getOfficina() {
+    return this.centriConvenzionatiService.getOfficina();
+  }
+
+  @Get('data-office')
+  async dataOfficina() {
+    return this.centriConvenzionatiService.dataOfficina();
   }
 
   @Get(':id')
@@ -61,9 +73,9 @@ export class CentriConvenzionatiController {
 
   @Patch(':id')
   async update(
-    @Param(ValidationPipe) { id }: IdParam,
-    @Body(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true })) updateCentriConvenzionatiDto: UpdateCentriConvenzionatiDto) {
-
+    @Param('id') id: string, @Body() updateCentriConvenzionatiDto: any) {
+    console.log('id:::___', id)
+    console.log('centri-convenzionati', updateCentriConvenzionatiDto)
     const Officine = await this.centriConvenzionatiService.update(+id, updateCentriConvenzionatiDto);
 
     if (!Officine) {

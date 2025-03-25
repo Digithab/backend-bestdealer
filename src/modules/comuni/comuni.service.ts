@@ -13,20 +13,30 @@ export class ComuniService {
   ) { }
 
   async findByCity(search: string): Promise<Comuni> {
-
-    let query = 'SELECT * FROM comuni';
+    
+    let query = 'SELECT cm.id as value, cm.citta as label,  cm.* FROM comuni cm';
 
     let params: any[] = [];
 
     if (search && search.trim() !== '') {
+      const searchTerm = search.trim();
 
-      query += ' WHERE citta LIKE ?';
+      // Si el término de búsqueda es numérico, buscar por ID exacto o citta
+      if (/^\d+$/.test(searchTerm)) {
+        query += ' WHERE cm.id = ? OR cm.citta LIKE ?';
+        params.push(searchTerm, `%${searchTerm}%`);
+      } else {
+        // Si no es numérico, buscar solo por citta
+        query += ' WHERE cm.citta LIKE ?';
+        params.push(`%${searchTerm}%`);
+      }
 
-      params.push(`%${search.trim()}%`);
-
+      query += ' LIMIT 50';
+    } else {
+      query += ' LIMIT 50';
     }
 
-    query += ' LIMIT 20'
+
 
     const items = await this.entityManager.query(
       query, params

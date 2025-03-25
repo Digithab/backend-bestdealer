@@ -1,25 +1,32 @@
 # Stage 1: Build the application
 FROM node:20-alpine AS builder
 
+# Install system dependencies
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    dbus
+
 # Create app directory
 WORKDIR /usr/src/app
 
-# Install build tools and libraries
-RUN apk add --no-cache python3 make g++
+# Set Puppeteer environment
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
-# Copy package.json and package-lock.json
+# Copy package files
 COPY package*.json ./
 
 # Install dependencies
+RUN npm install puppeteer
 RUN npm install
 
-# Copy the application code
+# Copy application code
 COPY . .
-
-
-COPY .env ./
-
-
 
 # Build the application
 RUN npm run build
@@ -27,20 +34,29 @@ RUN npm run build
 # Stage 2: Create the lightweight production image
 FROM node:20-alpine
 
+# Install runtime dependencies
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    dbus
+
 # Create app directory
 WORKDIR /usr/src/app
 
-# Install runtime dependencies
-RUN apk add --no-cache libstdc++
-
-# Copy only the production build from the builder stage
+# Copy build artifacts
 COPY --from=builder /usr/src/app/dist ./dist
 COPY --from=builder /usr/src/app/node_modules ./node_modules
 COPY --from=builder /usr/src/app/package*.json ./
 COPY --from=builder /usr/src/app/.env ./
 
+# Set Puppeteer environment
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
-# Expose the necessary port
+# Expose port
 EXPOSE 4080
 
 # Start the application

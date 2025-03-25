@@ -54,19 +54,20 @@ export class ClientiService {
     search: Clienti = {},
     page: number = 1,
     limit: number = 20,
-    sort: string = 'id',
+    sort: string = 'denominazione',
     order: 'ASC' | 'DESC' = 'ASC'
   ): Promise<{ clienti: any[], total: number }> {
     page = Math.max(1, Number(page));
     limit = Math.max(1, Math.min(50, Number(limit)));
     const validOrder = ['ASC', 'DESC'].includes(order) ? order : 'ASC';
 
-    const sortColumn = ClientiSearchKeys.includes(sort) ? sort : 'id';
+    const sortColumn = ClientiSearchKeys.includes(sort) ? sort : 'denominazione';
 
     const query = this.entityManager.createQueryBuilder()
-      .select('ci.*, co.citta as comuni, co.provincia as prov')
+      .select('ci.*, co.citta as comuni, co.provincia as prov, a.sigla')
       .from('clienti', 'ci')
       .innerJoin('comuni', 'co', 'ci.comune = co.id')
+      .innerJoin('agenti', 'a', 'ci.agente = a.id')
       .where('ci.is_deleted = 0')
       .andWhere('ci.abilitazione_proforma = 1');
 
@@ -91,8 +92,9 @@ export class ClientiService {
   async findOne(id: number) {
 
     const query = this.entityManager.createQueryBuilder()
-      .select('ci.*')
+      .select('ci.*, c.provincia')
       .from('clienti', 'ci')
+      .innerJoin('comuni', 'c', 'ci.comune = c.id')
       .where('ci.is_deleted = 0')
       .andWhere('ci.id = :id', { id })
 
@@ -106,7 +108,7 @@ export class ClientiService {
 
   }
 
-  async update(id: number, updateClientiDto: UpdateClientiDto): Promise<any> {
+  async update(id: number, updateClientiDto: any): Promise<any> {
 
     try {
 
@@ -158,6 +160,19 @@ export class ClientiService {
     return `Delete complete`;
   }
 
+  type(value: string) {
+    switch (value) {
+      case 'Fisica':
+        return '0'
+        break;
+      case 'Giuridica':
+        return '1'
+        break;
+      default:
+      // code block
+    }
+  }
+
   applyFilters(query: SelectQueryBuilder<any>, search: Clienti): void {
     // Lista de campos válidos para filtrar (excluyendo page y limit)
 
@@ -166,7 +181,20 @@ export class ClientiService {
     validFields.forEach(key => {
       const value = search[key];
       if (value !== undefined && value !== null && value !== '') {
-        if (typeof value === 'string') {
+
+        if (key === 'tipo_persona' && value !== undefined) {
+          query.andWhere(`ci.tipo_persona = :${key}`, { [key]: this.type(value) });
+        }
+
+        if (key === 'sigla' && value !== undefined) {
+          query.andWhere(`a.sigla = :${key}`, { [key]: value });
+        }
+
+        if (key === 'comune' && value !== undefined) {
+          query.andWhere(`co.citta = :${key}`, { [key]: value });
+        }
+
+        if (typeof value === 'string' && key !== 'tipo_persona' && key !== 'sigla' && key !== 'comune') {
           query.andWhere(`ci.${key} LIKE :${key}`, { [key]: `%${value}%` });
         } else if (typeof value === 'number') {
           query.andWhere(`ci.${key} = :${key}`, { [key]: value });

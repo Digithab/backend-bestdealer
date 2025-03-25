@@ -1,12 +1,11 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseFilters, ValidationPipe, NotFoundException, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseFilters, ValidationPipe, NotFoundException, Query, UseGuards } from '@nestjs/common';
 import { FornitoriService } from './fornitori.service';
-import { CreateFornitoriDto } from './dto/create-fornitori.dto';
-import { UpdateFornitoriDto } from './dto/update-fornitori.dto';
 import { IsInt, IsPositive } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { HttpExceptionFilter } from 'src/filters/http-exception.filter';
 import { Fornitori } from './interface/fornitori.interface';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 class IdParam {
   @IsInt()
@@ -17,12 +16,13 @@ class IdParam {
 
 @ApiTags('Fornitori')
 @Controller('fornitori')
+@UseGuards(JwtAuthGuard) // Asegúrate de proteger estas rutas
 @UseFilters(new HttpExceptionFilter())
 export class FornitoriController {
   constructor(private readonly fornitoriService: FornitoriService) { }
 
   @Post()
-  create(@Body() createFornitoriDto: CreateFornitoriDto) {
+  create(@Body() createFornitoriDto: any) {
     return this.fornitoriService.create(createFornitoriDto);
   }
 
@@ -67,7 +67,7 @@ export class FornitoriController {
   @Patch(':id')
   async update(
     @Param(ValidationPipe) { id }: IdParam,
-    @Body(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true })) updateFornitoriDto: UpdateFornitoriDto
+    @Body(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true })) updateFornitoriDto: any
   ) {
     const fornitori = await this.fornitoriService.update(+id, updateFornitoriDto);
 

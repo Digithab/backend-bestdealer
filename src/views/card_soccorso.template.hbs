@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        .page {
+            width: 192mm;
+            height: 280mm;
+            margin: 0 auto;
+            padding-top: 30px
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            font-family: "Nunito Sans", Arial, Helvetica Neue, Helvetica, sans-serif !important;
+
+        }
+
+        img#logo {
+            height: 13mm;
+        }
+
+        img#logo_big {
+            width: 90mm;
+        }
+
+        .cardss {
+            height: 5cm;
+            width: auto;
+        }
+
+        .tipo-garanzia img {
+            height: 5cm;
+            width: auto;
+        }
+
+        .heading-copia {
+            border: 0.5mm solid #bbbbbb;
+            background: #dddddd;
+            height: 7mm;
+            font-size: 12pt;
+            vertical-align: baseline;
+            font-weight: normal;
+            padding: 0 3mm;
+            margin-bottom: 2mm;
+        }
+
+        .align-right {
+            text-align: right;
+        }
+
+        .align-center {
+            text-align: center;
+        }
+
+        .bg-yellow {
+            background: #ffffb7;
+        }
+
+        .bg-grey {
+            background: #e0e0e0;
+        }
+
+        .contatti-dealer {
+            padding: 2mm 0;
+        }
+
+        .txt-18 {
+            font-size: 18px;
+        }
+
+        .txt-14 {
+            font-size: 14px;
+        }
+
+        .txt-12 {
+            font-size: 12px;
+        }
+
+        .txt-9 {
+            font-size: 9px;
+        }
+
+        .txt-8 {
+            font-size: 8px;
+        }
+
+        .txt-6 {
+            font-size: 6px;
+        }
+
+        .line {
+            height: 0.7mm;
+            background: #969696;
+        }
+
+        .mt-8 {
+            margin-top: 8mm;
+        }
+
+        .mt-40 {
+            margin-top: 40px;
+        }
+
+        .pd-3 {
+            padding: 3px;
+        }
+
+        .border-black {
+            border: 0.5mm solid black;
+        }
+
+        .border-black-top {
+            border-top: 0.5mm solid black;
+            border-left: 0.5mm solid black;
+            border-right: 0.5mm solid black;
+        }
+
+        .border-black-bottom {
+            border-left: 0.5mm solid black;
+            border-right: 0.5mm solid black;
+            border-bottom: 0.5mm solid black;
+        }
+
+        .border-blue {
+            border: 1px solid blue;
+        }
+
+        .v-middle {
+            vertical-align: middle;
+        }
+
+        .pl-4 {
+            padding-left: 4px;
+        }
+
+        .lh-1-5 {
+            line-height: 1.5em;
+        }
+
+        .firma-field {
+            height: 15mm;
+            border-bottom: 0.5mm solid black;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        table {
+            margin: 0 -0.5mm;
+            width: 100%;
+            font-family: Arial, Helvetica, sans-serif;
+            border-spacing: 4px;
+        }
+
+        tr.col-2 td {
+            width: 50%;
+        }
+
+        td {
+            vertical-align: top;
+        }
+
+        .col-2 td {
+            width: 50%;
+        }
+
+        .col-3 td {
+            width: 33.33%;
+        }
+
+        .no-spacing {
+            border-spacing: 0;
+        }
+
+        .contatti-dealer {
+            padding: 2mm 0;
+        }
+
+        .row {
+            display: block;
+            margin-bottom: 1mm;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Página 1 - Copia para el Dealer -->
+    <div class="page">
+        <div class="row">
+            <div class="heading-copia align-right">
+                COPIA PER IL DEALER
+            </div>
+        </div>
+        <div class="row">
+            <img src={{logo}} id="logo_big">
+        </div>
+        <div class="row bg-yellow align-center contatti-dealer">
+            <div class="col">
+                <b class="txt-18">{{dealer.denominazione}}</b>
+                <div class="txt-14">
+                    {{dealer.indirizzo}}, {{dealer.civico}} <br>
+                    {{comune_dealer.citta}} ({{comune_dealer.provincia}}) <br>
+                    Tel.: {{contatto_dealer.telefono}} <br>
+                    Email: {{decontatto_dealeraler.email}}
+                </div>
+            </div>
+        </div>
+        <div class="row line"></div>
+        <div class="row">
+            <table>
+                <tr class="col-2">
+                    <td>AUTOVEICOLO</td>
+                    <td>NUOVO PROPRIETARIO</td>
+                </tr>
+                <tr>
+                    <td class="bg-grey txt-12">
+                        <b>Modello:</b>
+                        {{marca_veicolo.nome}} {{modello_veicolo.nome}}
+                        <br>
+                        <b>Immatricolazione:</b>
+                        {{formatDate veicolo.immatricolazione}}
+                        <br>
+                        <b>Targa:</b>
+                        {{veicolo.targa}}
+                        <br>
+                        <b>Km:</b>
+                        {{veicolo.km}}
+                        <br>
+                    </td>
+                    <td class="bg-grey txt-12">
+                        {{propietario.denominazione}} <br>
+                        {{propietario.indirizzo}}, {{proprietario.civico}} <br>
+                        {{propietario.cap}} {{comune_proprietario.citta}} ({{comune_proprietario.provincia}}) <br>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <div class="row mt-8">
+            <table class="no-spacing">
+                <tr class="col-2">
+                    <td class="lh-1-5 align-center">
+                        <img src={{logo_soccorso}} class="cardss">
+                    </td>
+                    <td class="lh-1-5">
+                        <h3>È STATA ATTIVATA LA CARD CS{{card_soccorso.id}}
+                        </h3> <br>
+                        {{#if (eq card_soccorso.tipo_card 'C')}}
+                        <h3>Soccorso Stradale Camper 100km</h3> <br>
+                        <h3>Con Rientro Nazionale</h3>
+                        {{else}}
+                        <h3>Soccorso Stradale {{card_soccorso.tipo_card }}km dal punto di fermo
+                        </h3> <br>
+                        {{#if (gt card_soccorso.restituzione 0)}}
+                        <h3>Con Opzione Rientro {{#if (eq card_soccorso.restituzione
+                            1)}}Regionale{{else}}Nazionale{{/if}}
+                        </h3>
+                        {{/if}}
+                        {{/if}}
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <div class="row mt-8">
+            <table>
+                <tr class="col-3">
+                    <td class="align-center txt-9">LUOGO E DATA</td>
+                    <td class="align-center txt-9">FIRMA DEL CLIENTE</td>
+                    <td class="align-center txt-9">FIRMA DEL CLIENTE</td>
+                </tr>
+                <tr class="col-3">
+                    <td class="firma-field"></td>
+                    <td class="firma-field"></td>
+                    <td class="firma-field"></td>
+                </tr>
+                <tr class="col-3">
+                    <td class="align-center txt-9">Timbro e firma del dealer</td>
+                    <td class="txt-6">
+                        IL CLIENTE: ai sensi e per gli effetti degli artt. 1341 e 1342 del Codice Civile, dichiara di
+                        avere ricevuto, letto, presa attenta visione ed accettato le Condizioni Generali di Garanzia. Si
+                        dichiara altresì conseziente al trattamento ed alla comunicazione dei propri dati personali nei
+                        limiti e nel rispetto della normativa di cui al Decreto Legislativo 196/2003 e successive
+                        modifiche.
+                    </td>
+                    <td class="txt-6">
+                        IL CLIENTE: ai sensi e per gli effetti degli artt. 1341 e 1342 del Codice Civile, dichiara di
+                        avere ricevuto, letto, presa attenta visione ed accettato espressamente gli artt. 2, 4, 5, 7, 9,
+                        10, 11, 13 delle Condizioni Generali di Garanzia.
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    <div class="footer txt-8">
+        BEST DEALER SRLS P.zza DON LUIGI STURZO 15 int. 3 - P.IVA/C.F. 13921591007
+    </div>
+
+    <!-- Página 2 - Copia para el Cliente -->
+    <div class="page">
+        <div class="row">
+            <div class="heading-copia align-right">
+                COPIA PER IL CLIENTE <span class="txt-6">(pag. 1)</span>
+            </div>
+        </div>
+        <div class="row">
+            <img src={{logo}} id="logo_big">
+        </div>
+        <div class="row bg-yellow align-center contatti-dealer">
+            <div class="col">
+                <b class="txt-18">{{dealer.denominazione}}</b>
+                <div class="txt-14">
+                    {{dealer.indirizzo}}, {{dealer.civico}} <br>
+                    {{comune_dealer.citta}} ({{comune_dealer.provincia}}) <br>
+                    Tel.: {{contatto_dealer.telefono}} <br>
+                    Email: {{contatto_dealer.email}}
+                </div>
+            </div>
+        </div>
+        <div class="row line"></div>
+        <div class="row">
+            <table>
+                <tr class="col-2">
+                    <td>AUTOVEICOLO</td>
+                    <td>NUOVO PROPRIETARIO</td>
+                </tr>
+                <tr>
+                    <td class="bg-grey txt-12">
+                        <b>Modello:</b>
+                        {{marca_veicolo.nome}} {{modello_veicolo.nome}}
+                        <br>
+                        <b>Immatricolazione:</b>
+                        {{formatDate veicolo.immatricolazione}}
+                        <br>
+                        <b>Targa:</b>
+                        {{veicolo.targa}}
+                        <br>
+                        <b>Km:</b>
+                        {{veicolo.km}}
+                        <br>
+                    </td>
+                    <td class="bg-grey txt-12">
+                        {{propietario.denominazione}} <br>
+                        {{propietario.indirizzo}}, {{proprietario.civico}} <br>
+                        {{propietario.cap}} {{comune_proprietario.citta}} ({{comune_proprietario.provincia}}) <br>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <div class="row mt-8">
+            <table class="no-spacing">
+                <tr class="col-2">
+                    <td class="lh-1-5 align-center">
+                        <img src={{logo_soccorso}} class="cardss">
+                    </td>
+                    <td class="lh-1-5">
+                        <h3>È STATA ATTIVATA LA CARD CS{{card_soccorso.id}}
+                        </h3> <br>
+                        {{#if (eq card_soccorso.tipo_card 'C')}}
+                        <h3>Soccorso Stradale Camper 100km</h3> <br>
+                        <h3>Con Rientro Nazionale</h3>
+                        {{else}}
+                        <h3>Soccorso Stradale {{card_soccorso.tipo_card }}km dal punto di fermo
+                        </h3> <br>
+                        {{#if (gt card_soccorso.restituzione 0)}}
+                        <h3>Con Opzione Rientro {{#if (eq card_soccorso.restituzione
+                            1)}}Regionale{{else}}Nazionale{{/if}}
+                        </h3>
+                        {{/if}}
+                        {{/if}}
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <div class="row mt-8">
+            <div class="border-blue align-center txt-8 pd-3 mt-40">
+                NUMERO VERDE SOCCORSO: 800911491 - SERVIZIO CLIENTI 06/81152274 FAX 06/81152276 - EMAIL:
+                guasti@bestdealer.it
+            </div>
+        </div>
+    </div>
+    <div class="footer txt-8">
+        BEST DEALER SRLS P.zza DON LUIGI STURZO 15 int. 3 - P.IVA/C.F. 13921591007
+    </div>
+</body>
+
+</html>

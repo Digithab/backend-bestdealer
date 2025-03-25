@@ -1,9 +1,10 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseFilters, ValidationPipe, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseFilters, ValidationPipe, NotFoundException, UseGuards } from '@nestjs/common';
 import { AgentiService } from './agenti.service';
 import { IsInt, IsPositive } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { HttpExceptionFilter } from 'src/filters/http-exception.filter';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 
 class IdParam {
@@ -15,6 +16,7 @@ class IdParam {
 
 @ApiTags('Agenti')
 @Controller('agenti')
+@UseGuards(JwtAuthGuard) // Asegúrate de proteger estas rutas
 @UseFilters(new HttpExceptionFilter())
 export class AgentiController {
   constructor(private readonly agentiService: AgentiService) { }

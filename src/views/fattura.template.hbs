@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        /* Reset y estilos base */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Nunito Sans", Arial, Helvetica Neue, Helvetica, sans-serif !important;
+
+        }
+
+        body {
+            font-family: "Nunito Sans", Arial, Helvetica Neue, Helvetica, sans-serif !important;
+            font-size: 10pt;
+        }
+
+        /* Estructura de página */
+        .page {
+            width: 192mm;
+            height: 280mm;
+            padding: 15mm;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        /* Logo y encabezado */
+        .intestazione table {
+            width: 100%;
+            margin-bottom: 2mm;
+        }
+
+        .logo {
+            height: 13mm;
+        }
+
+        #logo_big {
+            width: 90mm;
+        }
+
+        .cliente {
+            vertical-align: bottom;
+            padding-left: 10mm;
+        }
+
+        /* Número de documento */
+        .row+div {
+            display: block;
+            font-size: 9pt;
+            margin-bottom: 1mm;
+        }
+
+        table {
+            margin: 0 -0.5mm;
+            width: 100%;
+            font-family: 'Arial', 'Helvetica Neue', Helvetica, sans-serif !important;
+            border-spacing: 4px;
+        }
+
+        /* Tabla principal */
+        .corpo-proforma table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        td {
+            vertical-align: top;
+        }
+
+
+        /* Encabezados de tabla */
+        .corpo-proforma thead td {
+            padding: 4px;
+            background-color: #ffffb7;
+            padding-top: 1mm;
+            padding-bottom: 1mm;
+            font-weight: bold;
+        }
+
+        .corpo-proforma table tbody tr td {
+            padding: 4px;
+        }
+
+        .corpo-proforma table tbody tr:nth-child(even) td {
+            background: #f0f0f0;
+        }
+
+        /* Columnas específicas */
+        .corpo-proforma table td:nth-child(1) {
+            width: 60%;
+        }
+
+        .corpo-proforma table td:nth-child(2),
+        .corpo-proforma table td:nth-child(3) {
+            width: 10%;
+            text-align: right;
+        }
+
+        .corpo-proforma table td:nth-child(4) {
+            width: 20%;
+            text-align: right;
+        }
+
+        /* Pie de tabla */
+        .corpo-proforma tfoot td {
+            padding-top: 5mm;
+            font-size: 9pt;
+        }
+
+        .corpo-proforma tfoot td:nth-child(3) {
+            text-align: right;
+            padding-right: 2mm;
+        }
+
+        .tot-lordo-row td {
+            background: #FFFFFF;
+            padding-top: 5mm;
+            padding-bottom: 5mm;
+        }
+
+        /* Sección de vencimientos */
+        .scadenze-proforma {
+            margin-top: 5mm;
+
+        }
+
+        .scadenze-proforma p {
+            font-weight: bold;
+            padding: 1mm 0;
+        }
+
+        /* Pie de página */
+        .footer {
+            position: absolute;
+            bottom: 20mm;
+            left: 15mm;
+            right: 15mm;
+            text-align: center;
+            font-size: 8pt;
+
+        }
+
+        .footer p {
+            margin-bottom: 2mm;
+        }
+
+        /* Utilidades */
+        .bg-yellow {
+            background-color: #ffffb7;
+        }
+
+        .align-right {
+            text-align: right;
+        }
+
+        .tot {
+            font-weight: bold;
+        }
+
+        /* Ajustes específicos */
+        .v-spacer {
+            height: 8mm;
+        }
+
+        /* Ajustes de impresión */
+    </style>
+</head>
+
+<body>
+    <div class="page">
+        <div class="row intestazione">
+            <table>
+                <tr class="col-2">
+                    <td class="logo">
+                        <img src={{logo}} id="logo_big">
+                    </td>
+                    <td class="pl-10 cliente">
+                        Spett.le <br>
+                        {{cliente.rag_sociale}} <br>
+                        {{cliente.indirizzo}} {{cliente.civico}} <br>
+                        {{cliente.cap}} - {{cliente.citta}} ({{cliente.provincia}})
+                        {{#if (eq cliente.tipo_cliente 1)}}
+                        <br>
+                        C.F.: {{cliente.partita_iva}}
+                        {{/if}}
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="row v-spacer"></div>
+        <div>
+            <p>
+                <b>
+                    {{#if (eq fattura.tipo_fattura 'TD04')}}
+                    Nota di Credito
+                    {{else}}
+                    Fattura
+                    {{/if}}
+                    n. {{fattura.num_fattura}} del {{fattura.data}}
+                    (pag. 1 di 1)
+                </b>
+                <br>
+            </p>
+            <p>
+                (Copia di documento informatico disponibile in area riservata sito AdE. I dati personali sono trattati
+                nel rispetto di
+                quanto disposto dal G.D.P.R. 679/2016 e dal D.Lgs. 196/2003)<br>
+            </p>
+        </div>
+        <div class="row corpo-proforma">
+            <table>
+                <thead>
+                    <tr class="bg-yellow">
+                        <td>Descrizione</td>
+                        <td class="align-right">Prezzo</td>
+                        <td class="align-right">Q.tà</td>
+                        <td class="align-right">Totale</td>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{#each fattura.corpo}}
+                    <tr>
+                        <td>{{descrizione}}</td>
+                        <td class="align-right">{{prezzo_unitario}}</td>
+                        <td class="align-right">{{quantita}}</td>
+                        <td class="align-right">{{totale}}</td>
+                    </tr>
+                    {{/each}}
+
+                    {{#if (and (eq fattura.tipo_fattura 'TD01') fattura.rif_acconti)}}
+                    <tr class="tot-lordo-row">
+                        <td></td>
+                        <td class="align-right" colspan="2">Totale Lordo</td>
+                        <td class="align-right"><b>{{fattura.tot_proforma}}</b></td>
+                    </tr>
+                    {{#each fattura.rif_acconti}}
+                    <tr>
+                        <td>{{descrizione}}</td>
+                        <td class="align-right">-{{format_number detrazione 2}}</td>
+                        <td class="align-right">1</td>
+                        <td class="align-right">-{{format_number detrazione 2}}</td>
+                    </tr>
+                    {{/each}}
+                    {{/if}}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td></td>
+                        <td class="align-right" colspan="2">Totale Imponibile</td>
+                        <td class="align-right"><b>{{fattura.imponibile}}</b>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td class="align-right" colspan="2">Imposta</td>
+                        <td class="align-right"><b>{{format_number (calculateIva fattura.tot_dovuto)}}</b></td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td class="align-right" colspan="2">Totale Dovuto</td>
+                        <td class="align-right"><b>{{format_number fattura.tot_dovuto 2}}</b></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+    <div class="footer txt-8">
+        <p>
+            BEST DEALER SRLS P.zza DON LUIGI STURZO 15 int. 3 - P.IVA/C.F. 13921591007
+        </p>
+    </div>
+</body>
+
+</html>
