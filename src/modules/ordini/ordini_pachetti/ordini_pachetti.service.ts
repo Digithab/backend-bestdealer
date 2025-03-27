@@ -6,7 +6,7 @@ import { InjectDataSource, InjectEntityManager } from '@nestjs/typeorm';
 import { OrdiniSearch } from './interface/ordini_pachetti.interface';
 import { UsersService } from 'src/modules/users/users.service';
 import { User } from 'src/interfaces/interfaces';
-import { addYears, format } from 'date-fns';
+import { addYears, endOfMonth, format } from 'date-fns';
 import { LogService } from 'src/modules/operation/log/log.service';
 import { ProformaService } from 'src/modules/Fatture/proforma/proforma.service';
 import { DisponibilitaPacchettiService } from 'src/modules/Guarantees/disponibilita_pacchetti/disponibilita_pacchetti.service';
@@ -104,21 +104,30 @@ export class OrdiniPachettiService {
   ) { }
 
   async create(createOrdiniPachettiDto: any, userId: string) {
+    const user = await this.validateUser(userId);
+
+    if (user.role !== 'admin') return
+
+    const model = createOrdiniPachettiDto;
+
+    model.id_proforma = 0;
+    model.data_inserimento = new Date();
+    model.is_deleted = false;
+    model.data_attivazione = format(model.data_attivazione, 'yyyy-MM-dd');
+    model.data_scadenza = format(addYears(model.data_scadenza, 1), 'yyyy-MM-dd');
+
+    // Se delle garanzie precedentemente a consumo rientrano ora nel pack,
+    // Il proforma in cui venivano pagate deve essere rigenerato
+    let proforma_da_rigenerare = [];
+    const { post, prod_extra, ...filteredModel } = model;
+
     return await this.dataSource.transaction(async (manager) => {
-      const user = await this.validateUser(userId);
 
-      if (user.role !== 'admin') return
+      const [pagamento] = await manager.query(`
+        SELECT pagamento__data FROM dealers WHERE id = ?
+      `, [model.dealer]);
 
-      const model = createOrdiniPachettiDto;
-
-      model.id_proforma = 0;
-      model.data_inserimento = new Date();
-      model.is_deleted = false;
-
-      // Se delle garanzie precedentemente a consumo rientrano ora nel pack,
-      // Il proforma in cui venivano pagate deve essere rigenerato
-      let proforma_da_rigenerare = [];
-      const { post, prod_extra, ...filteredModel } = model;
+      filteredModel.pagamento__data = pagamento.pagamento__data;
 
       const is_saved = await manager
         .createQueryBuilder()
@@ -130,34 +139,37 @@ export class OrdiniPachettiService {
         .execute();
       await manager.query('COMMIT');
 
-      console.log('model___ ', model)
       if (is_saved) {
-        // Guarda el log        
-        await this.logService.create(1, 'pack_gr', is_saved.raw?.insertId, '', model.attributes)
+
+        await this.logService.create(1, 'pack_gr', is_saved.raw?.insertId, '', model.attributes, user.id)
 
         // Selezione delle garanzie abilitate per il dealer
-        const garanzieAbilitate = await manager.query('SELECT * FROM dealers__garanzie_abilitate WHERE dealer = ? AND attivo = 1', [model.dealer])
-        const tipi = await manager.query('SELECT dga.id FROM dealers__garanzie_abilitate dga WHERE dealer = ?', [model.dealer])
+        const garanzieAbilitate = await manager.query(`
+          SELECT * FROM dealers__garanzie_abilitate WHERE dealer = ? AND attivo = 1
+        `, [model.dealer])
+
+        const tipi = await manager.query(`
+          SELECT dga.id FROM dealers__garanzie_abilitate dga WHERE dealer = ?
+        `, [model.dealer])
+
         let importo_tot = 0;
         let index = 0;
+
         for (let record of garanzieAbilitate) {
 
-          console.log('tipi[index]___ ', tipi[index])
           const productKey = tipi[index].id;
 
           if (post[productKey] && (post[productKey].quantita !== 0 || post[productKey].omaggio !== 0)) {
             const productPost = post[productKey]; // Accedemos al producto específico
-            console.log('productPost____ ', productPost)
 
             let prodotto_model = await manager.query('SELECT * FROM ordini__prodotti_quantita WHERE ordine = ? AND prodotto = ? AND is_extra = false', [is_saved.raw?.insertId, record.tipo_garanzia])
-            console.log('prodotto_model___ ', prodotto_model)
             if (!prodotto_model) {
               prodotto_model = {
                 ordine: is_saved.raw?.insertId,
                 prodotto: record.tipo_garanzia
               }
             }
-            console.log('is_saved.raw?___ ', is_saved.raw)
+
             prodotto_model = {
               is_extra: false,
               prodotto: index + 1,
@@ -167,7 +179,6 @@ export class OrdiniPachettiService {
               omaggio: Number(productPost.omaggio)
             }
 
-            console.log('prodotto_model___ '), prodotto_model
             const prodotto = await manager
               .createQueryBuilder()
               .insert()
@@ -175,7 +186,7 @@ export class OrdiniPachettiService {
               .values(prodotto_model)
               .execute();
 
-            await this.logService.create(1, 'pack_gr_qta', prodotto.raw?.insertId, '', prodotto_model.attributes)
+            await this.logService.create(1, 'pack_gr_qta', prodotto.raw?.insertId, '', prodotto_model.attributes, user.id)
 
             /**
            * Ricerca di tutte le garanzie del tipo `$record->tipo_garanzia` attivate dopo il pack
@@ -248,7 +259,7 @@ export class OrdiniPachettiService {
                   .where('id = :id', { id_garanzie })
                   .execute();
 
-                await this.logService.create(2, 'garanzie', id_garanzie, old_gr.attributes, garanzie.attributes)
+                await this.logService.create(2, 'garanzie', id_garanzie, old_gr.attributes, garanzie.attributes, user.id)
 
                 // delete old_gr;
                 // delete garanzie;
@@ -355,7 +366,7 @@ export class OrdiniPachettiService {
                       .where('id = :id', { id_garanzie })
                       .execute();
 
-                    await this.logService.create(2, 'garanzie', id_garanzie, old_gr.attributes, garanzia.attributes)
+                    await this.logService.create(2, 'garanzie', id_garanzie, old_gr.attributes, garanzia.attributes, user.id)
                   }
                 }
                 break;
@@ -404,7 +415,7 @@ export class OrdiniPachettiService {
                       .where('id = :id', { id_garanzie })
                       .execute();
 
-                    await this.logService.create(2, 'garanzie', id_garanzie, old_gr.attributes, garanzia.attributes)
+                    await this.logService.create(2, 'garanzie', id_garanzie, old_gr.attributes, garanzia.attributes, user.id)
                   }
                 }
                 break;
@@ -414,11 +425,14 @@ export class OrdiniPachettiService {
           }
         }
 
-        const data_pf = model.data_attivazione !== format(new Date(), 'yyyy-MM-dd')
+        const today = new Date();
+        const data_pf = model.data_attivazione !== format(today, 'yyyy-MM-dd')
           ? model.data_attivazione
           : model.pagamento__data
-            ? format(new Date(), 'yyyy-MM-t')
-            : format(new Date(), 'yyyy-MM-dd');
+            ? format(endOfMonth(today), 'yyyy-MM-dd')  // Último día del mes
+            : format(today, 'yyyy-MM-dd');
+
+        console.log('Final data_pf:', data_pf);
 
         const proforma = {
           'tipo_cliente': 0,
@@ -1412,7 +1426,7 @@ export class OrdiniPachettiService {
           )
         }
 
-        
+
 
 
         if (typeof value === 'string' && key !== 'data_inserimento' && key !== 'data_attivazione' && key !== 'data_scadenza') {

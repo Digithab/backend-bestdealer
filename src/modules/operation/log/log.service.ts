@@ -15,12 +15,13 @@ export class LogService {
 
   ) { }
 
-  async create(operazione: number, record_table: string, record_id: any, oldVal?: any, newVal?: any) {
+  async create(operazione: number, record_table: string, record_id: any, oldVal?: any, newVal?: any, user?: string) {
     await this.entityManager
       .createQueryBuilder()
       .insert()
       .into('log') // Assuming a 'log' table
       .values({
+        user: user,
         operazione: operazione,
         record_table: record_table,
         record_id: record_id,

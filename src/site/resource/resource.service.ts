@@ -34,7 +34,7 @@ export class ResourceService {
       throw new Error('Failed to fetch agenti');
     }
   }
-
+  
   async getAgentiDenomizacione() {
     try {
       const agenti = await this.dataSource.createQueryBuilder()

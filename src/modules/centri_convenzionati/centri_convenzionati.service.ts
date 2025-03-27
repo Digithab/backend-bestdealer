@@ -157,6 +157,7 @@ export class CentriConvenzionatiService {
           'ce.email as email',
           'co.citta as citta',
           'co.provincia as provincia',
+          'ce.commento'
         ])
         .from('centri_convenzionati', 'ce')
         .leftJoin('comuni', 'co', 'ce.comune = co.id')
@@ -173,6 +174,7 @@ export class CentriConvenzionatiService {
           .from('centri_convenzionati__tipi', 'cct')
           .leftJoin('centri_convenzionati__assoc__tipi', 'ccat', 'cct.id = ccat.tipo')
           .where('ccat.centro = :id', { id: data[0].id })
+          .andWhere('ccat.attivo = 1')
           .getRawMany();
 
         // Extraer solo los valores de descripción

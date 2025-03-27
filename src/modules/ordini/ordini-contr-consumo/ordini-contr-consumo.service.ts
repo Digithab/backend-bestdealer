@@ -225,29 +225,18 @@ export class OrdiniContrConsumoService {
 
       if (is_saved) {
 
-        const garanzia_abilit = await manager.query('SELECT * FROM dealers__garanzie_abilitate WHERE dealer = ? AND attivo = 1', [model.dealer])
         const tipi = await manager.query('SELECT dga.tipo_garanzia FROM dealers__garanzie_abilitate dga WHERE dealer = ? AND attivo = 1', [model.dealer])
-        console.log('tipi: ', tipi)
-        // Iterazione su ogni garanzia a cui il dealer è abilitato
+
+        const quantita = await manager.query('SELECT * FROM ordini__contratti_a_consumo__quantita WHERE contratto = ?', [id])
+
         let index = 0;
-        for (let garanzia of garanzia_abilit) {
-          // Viene creata la row per la tabella ordini__contratti_a_consumo__quantita
+        for (let garanzia of quantita) {
+
           const productKey = tipi[index].tipo_garanzia;
-          console.log('productKey: ', productKey)
+
           const { prezzo_unitario, id } = model.quantita[`${productKey}`]
-          console.log('model.quantita: ', model.quantita)
-          const result = await this.dataSource.query('UPDATE ordini__contratti_a_consumo__quantita SET prezzo_unitario = ? WHERE id = ?', [prezzo_unitario, id])
-          console.log('result: ', result)
-          // await manager
-          //   .createQueryBuilder()
-          //   .insert()
-          //   .into('ordini__contratti_a_consumo__quantita') // Assuming a 'log' table
-          //   .values({
-          //     contratto: id,
-          //     garanzia: garanzia.tipo_garanzia,
-          //     prezzo_unitario: prezzo_unitario,
-          //   })
-          //   .execute();
+
+          await this.dataSource.query('UPDATE ordini__contratti_a_consumo__quantita SET prezzo_unitario = ? WHERE id = ?', [prezzo_unitario, id])
 
           index++
         }

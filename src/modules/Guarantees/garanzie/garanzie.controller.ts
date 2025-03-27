@@ -10,7 +10,7 @@ import { Response } from 'express';
 
 
 @Controller('guarantees/garanzie')
-// @UseGuards(JwtAuthGuard) // Asegúrate de proteger estas rutas
+@UseGuards(JwtAuthGuard) // Asegúrate de proteger estas rutas
 export class GaranzieController {
   constructor(
     private readonly garanzieService: GaranzieService,
