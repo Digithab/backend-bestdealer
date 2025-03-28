@@ -460,14 +460,6 @@ export class OrdiniPachettiService {
 
         model.id_proforma = pf_found.raw?.insertId
 
-        // await manager
-        //   .createQueryBuilder()
-        //   .insert()
-        //   .into('ordini__pacchetti')
-        //   .values(
-        //     filteredModel
-        //   )
-        //   .execute();
         await manager
           .createQueryBuilder()
           .update('ordini__pacchetti')
