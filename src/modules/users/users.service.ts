@@ -15,70 +15,120 @@ export class UsersService {
         private readonly mailService: MailService,
     ) { }
 
-    async findByUsername(username: string): Promise<any | null> {
+    private async getUserWithPermissions(userData: any, roleName: string): Promise<User> {
+        // Obtener permisos del rol desde la base de datos
+        const [role] = await this.entityManager.query(
+            `SELECT r.id, r.name, GROUP_CONCAT(rp.permission_id) as permission_ids 
+            FROM roles r
+            LEFT JOIN role_permissions rp ON r.id = rp.role_id
+            WHERE r.name = ?
+            AND rp.is_active = 1
+            GROUP BY r.id`,
+            [roleName]
+        );
 
-        // Buscar en la tabla de admins
-        console.log('username___ ', username)
-        const admin = await this.entityManager.query(
-            'SELECT * FROM admins WHERE LOWER(email) = LOWER(?)',
+        // Obtener nombres de permisos
+        let permissions = [];
+        if (role.permission_ids) {
+            // Convertir la cadena a un array de números
+            const permissionIds = role.permission_ids.split(',');
+
+            const query = `
+            SELECT p.name
+            FROM permissions p
+            WHERE p.id IN (${permissionIds.join(',')})`;
+
+            const permissionList = await this.entityManager.query(query);
+
+            // Verificar si permissionList es un array
+            if (Array.isArray(permissionList)) {
+                permissions = permissionList.map(p => p.name); // Mapear directamente permissionList
+            }
+        }
+
+        return {
+            ...userData,
+            role: roleName,
+            permissions: permissions || [],
+            roleId: role?.id || null
+        };
+    }
+
+    async findByUsername(username: string): Promise<User | null> {
+        // 1. Buscar en la tabla de admins (Super Admin o Admin)
+        const [admin] = await this.entityManager.query(
+            `SELECT a.*, r.name as role_name 
+            FROM admins a
+            LEFT JOIN roles r ON a.role_id = r.id
+            WHERE LOWER(a.email) = LOWER(?)`,
             [username]
         );
-        if (admin.length > 0) {
-            return {
-                id: `${admin[0].id}-admin`,
-                email: admin[0].email,
-                username: admin[0].nome,
+
+        if (admin) {
+            const roleName = admin.role_name || 'admin'; // Default a 'admin' si no tiene rol asignado
+            return this.getUserWithPermissions({
+                id: `${admin.id}-admin`,
+                email: admin.email,
+                username: admin.nome,
                 agente: 0,
-                password: admin[0].password,
-                role: 'admin',
-            };
+                password: admin.password,
+            }, roleName);
         }
 
-        // Buscar en la tabla de agenti
-        const agente = await this.entityManager.query(
-            'SELECT * FROM agenti WHERE UPPER(sigla) = UPPER(?) AND stato != 0',
+        // 2. Buscar en la tabla de agenti
+        const [agente] = await this.entityManager.query(
+            `SELECT a.*, r.name as role_name 
+       FROM agenti a
+       LEFT JOIN roles r ON a.role_id = r.id
+       WHERE UPPER(a.sigla) = UPPER(?) AND a.stato != 0`,
             [username]
         );
-        if (agente.length > 0) {
-            return {
-                id: `${agente[0].id}-agente`,
-                email: agente[0].email,
-                agente: agente[0].id,
-                sigla: agente[0].sigla,
-                username: agente[0].denominazione,
-                password: agente[0].password,
-                role: 'agente',
-            };
+
+        if (agente) {
+            const roleName = agente.role_name || 'agente'; // Default a 'agente'
+            return this.getUserWithPermissions({
+                id: `${agente.id}-agente`,
+                email: agente.email,
+                agente: agente.id,
+                sigla: agente.sigla,
+                username: agente.denominazione,
+                password: agente.password,
+            }, roleName);
         }
 
-
-        const dealer = await this.entityManager.query(
-            'SELECT * FROM dealers WHERE UPPER(pec) = UPPER(?) AND stato != 0',
+        // 3. Buscar en la tabla de dealers
+        const [dealer] = await this.entityManager.query(
+            `SELECT d.*, r.name as role_name, d2.password, d2.agente, d2.denominazione
+            FROM dealers__contatti d
+            INNER JOIN dealers d2 ON d.dealer = d2.id
+            LEFT JOIN roles r ON d.role_id = r.id
+            WHERE UPPER(d.email) = UPPER(?)
+            AND d2.stato = 1`,
             [username]
         );
-        if (dealer.length > 0) {
-            return {
-                id: `${dealer[0].id}-dealer`,
-                email: dealer[0].pec,
-                agente: dealer[0].agente,
-                username: dealer[0].denominazione,
-                password: dealer[0].password,
-                role: 'dealer',
-            };
+
+        if (dealer) {
+            const roleName = dealer.role_name || 'dealer'; // Default a 'dealer'
+
+            return this.getUserWithPermissions({
+                id: `${dealer.dealer}-dealer`,
+                email: dealer.email,
+                agente: dealer.agente,
+                username: dealer.denominazione,
+                password: dealer.password,
+            }, roleName);
         }
 
         return null;
     }
 
     async findLogin(email: string): Promise<User> {
-
-        const user = await this.findByUsername(email)
-
+        const user = await this.findByUsername(email);
         if (!user) {
             throw new NotFoundException(`User with Email ${email} not found`);
         }
 
-        return user as User;
+        return user;
     }
 
     async checkSiglaAgente(value: string) {

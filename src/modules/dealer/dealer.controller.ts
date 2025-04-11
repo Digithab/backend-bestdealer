@@ -24,7 +24,7 @@ export class DealerController {
     @Body() createDealerDto: CreateDealerDto,
     @Request() req
   ) {
-    const email = req.email.email
+    const email = req.user.email
     return this.dealerService.create(createDealerDto, email);
   }
 
@@ -33,7 +33,7 @@ export class DealerController {
     @Param('id') id: string,
     @Request() req
   ) {
-    const email = req.email.email;
+    const email = req.user.email;
     return this.dealerService.findDealerDocuments(id, email)
   }
 
@@ -52,7 +52,7 @@ export class DealerController {
     @Body() documentDto: any,
     @Request() req
   ) {
-    const email = req.email.email;
+    const email = req.user.email;
     return this.dealerService.uploadDocument(
       { ...documentDto, file },
       email)
@@ -63,7 +63,7 @@ export class DealerController {
     @Param('id') id: string,
     @Request() req
   ) {
-    const email = req.email.email;
+    const email = req.user.email;
     return this.dealerService.deleteDocument(id, email)
   }
 
@@ -72,7 +72,7 @@ export class DealerController {
     @Body() data: any,
     @Request() req
   ) {
-    const email = req.email.email;
+    const email = req.user.email;
     return this.dealerService.createVenditore(data, email)
   }
 
@@ -140,7 +140,7 @@ export class DealerController {
     @Request() req
   ) {
     try {
-      const email = req.email.email;
+      const email = req.user.email;
       const allegati = await this.dealerService.findDocument(+id, email);
       console.log('allegati: ', allegati);
       const fileExtension = allegati.ext;

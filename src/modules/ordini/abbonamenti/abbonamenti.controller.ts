@@ -12,7 +12,7 @@ export class AbbonamentiController {
 
   @Post()
   create(@Body() createAbbonamentiDto: any, @Request() req) {
-    const email = req.email.email
+    const email = req.user.email
     return this.abbonamentiService.create(createAbbonamentiDto, email);
   }
 
@@ -47,7 +47,7 @@ export class AbbonamentiController {
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateAbbonamentiDto: any, @Request() req) {
-    const email = req.email.email
+    const email = req.user.email
     return this.abbonamentiService.update(+id, updateAbbonamentiDto, email);
   }
 

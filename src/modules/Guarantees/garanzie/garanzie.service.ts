@@ -54,9 +54,9 @@ export class GaranzieService {
     private readonly genPdfService: GenPdfService
 
   ) { }
-  async create(createGarantiaDto: CreateGarantiaDto, userId: string, extend: any = '0') {
+  async create(createGarantiaDto: CreateGarantiaDto, extend: any = '0') {
+
     return await this.dataSource.transaction(async (manager) => {
-      const user = await this.validateUser(userId);
 
       let garantiaToExtend = null;
 
@@ -64,12 +64,9 @@ export class GaranzieService {
 
       if (extend !== '0') {
 
-        garantiaToExtend = await this.validateExtension(extend, user);
+        garantiaToExtend = await this.validateExtension(extend);
       }
 
-      if (user.role !== 'dealer' && user.role !== 'admin') {
-        throw new ForbiddenException('No tienes permisos para crear garantías');
-      }
 
       const today = format(new Date(), 'yyyy-MM-dd');
 
@@ -112,22 +109,10 @@ export class GaranzieService {
       const vehiculo = createGarantiaDto.Veicoli
       const propietario = createGarantiaDto.Clienti
 
-      let dealer
-      if (user.role === 'dealer') {
+      let dealer = await this.findDealer(garantia.dealer);
 
-        const dealerId = parseInt(user.id.split('-')[0]);
-        const Id = dealerId === undefined ? garantia.dealer : dealerId
-
-        dealer = await this.findDealer(Id);
-
-        garantia.dealer = dealerId;
-        garantia.agente = dealer.agente;
-      } else {
-        dealer = await this.findDealer(garantia.dealer);
-      }
 
       const { tipo_persona, denominazione, comune, cap, frazione, indirizzo, civico, cellulare, email } = propietario
-
       const insertedPropietario = await manager.query(
         `INSERT INTO clienti 
         (tipo_persona, denominazione, comune, cap,frazione, indirizzo, agente,civico, cellulare,email)
@@ -139,7 +124,7 @@ export class GaranzieService {
           cap,
           frazione,
           indirizzo,
-          user.agente,
+          dealer.agente,
           civico,
           cellulare,
           email
@@ -147,7 +132,6 @@ export class GaranzieService {
       );
 
       const propietarioId = insertedPropietario.insertId;
-
       vehiculo.cliente = propietarioId;
 
       const { marcaId, modeloId } = await this.processVehicleBrands(vehiculo, manager);
@@ -252,10 +236,11 @@ export class GaranzieService {
             'SELECT * FROM proforma WHERE tipo_cliente = ? AND id_cliente = ? AND tipo_proforma = ? AND data_proforma = ?',
             [0, garantia.dealer, 0, dataProforma])
 
-          if (!pf_found) {
+          if (pf_found.length === 0) {
             pf_found = [0, garantia.dealer, garantia.agente, 0, 0, this.getCurrentDateFormatted(), this.getLastDayOfCurrentMonth(), '1900-01-01', dealer.pagamento__rate, dealer.pagamento__differita, dealer.pagamento__periodo, false]
           }
         } else { // Proforma immediato
+
           pf_found = [0, garantia.dealer, garantia.agente, 0, 0, this.getCurrentDateFormatted(), this.getCurrentDateFormatted(), '1900-01-01', dealer.pagamento__rate, dealer.pagamento__differita, dealer.pagamento__periodo, false]
         }
 
@@ -455,16 +440,10 @@ export class GaranzieService {
 
   }
 
-  async update(id: number, updateGaranzieDto: any, userId: string) {
+  async update(id: number, updateGaranzieDto: any) {
     const proformasToRegenerate: number[] = [];
 
     const result = await this.dataSource.transaction(async (manager) => {
-      const user = await this.validateUser(userId);
-
-      // Validate permissions
-      if (user.role !== 'dealer' && user.role !== 'admin') {
-        throw new ForbiddenException('No tienes permisos para actualizar garantías');
-      }
 
       // Get existing warranty to compare changes
       const oldWarranty = await manager.query(
@@ -656,7 +635,6 @@ WHERE id = ?;
               proformaId = existingProforma[0].id;
             }
           }
-
           if (!proformaId) {
             const newProforma = await manager.query(
               `INSERT INTO proforma
@@ -679,7 +657,6 @@ WHERE id = ?;
                 false
               ]
             );
-
             proformaId = newProforma.insertId;
           }
         }
@@ -783,12 +760,8 @@ WHERE id = ?;
     }
   }
 
-  async getComment(id: number, email: string) {
-    const user = await this.validateUser(email)
+  async getComment(id: number) {
 
-    if (user.role !== 'admin') {
-      throw new ForbiddenException('No tienes permisos para agregar comentario en la garantía');
-    }
 
     const coment = await this.dataSource.query(
       `SELECT commento FROM garanzie WHERE id = ? AND is_deleted = 0`,
@@ -798,34 +771,27 @@ WHERE id = ?;
     return coment[0]
   }
 
-  async newComment(data: any, email: string) {
-    const user = await this.validateUser(email)
+  async newComment(data: any) {
 
-    if (user.role !== 'admin') {
-      throw new ForbiddenException('No tienes permisos para agregar comentario en la garantía');
-    }
+
+    const { newCommento, newCommentoGaranziaId } = data;
 
     try {
-      const { newCommento, newCommentoGaranziaId } = data
-      const garanzia = await this.dataSource.query(
-        `SELECT id FROM garanzie WHERE id = ? AND is_deleted = 0`,
-        [newCommentoGaranziaId]
+      // Comprobar existencia de garantía y actualizar comentario en una sola operación
+      const result = await this.dataSource.query(
+        `UPDATE garanzie 
+       SET commento = ? 
+       WHERE id = ? AND is_deleted = 0`,
+        [newCommento.trim().toUpperCase().substring(0, 250), newCommentoGaranziaId]
       );
 
-      if (!garanzia.length) {
+      // Verificar si se actualizó alguna fila
+      if (result.affectedRows === 0) {
         throw new HttpException(
           'La garanzia richiesta non è stata trovata.',
           HttpStatus.NOT_FOUND
         );
       }
-
-      const commentoProcessed = newCommento.trim().toUpperCase().substring(0, 250);
-
-      // Actualizar el comentario
-      await this.dataSource.query(
-        `UPDATE garanzie SET commento = ? WHERE id = ?`,
-        [commentoProcessed, newCommentoGaranziaId]
-      );
 
       return { message: 'Commento salvato con successo' };
     } catch (error) {
@@ -840,14 +806,12 @@ WHERE id = ?;
     // Lista de campos válidos para filtrar (excluyendo page y limit)
 
     const validFields = Object.keys(search).filter(key => !['page', 'limit', 'sort', 'order'].includes(key));
-    console.log('validFields: ', validFields)
     validFields.forEach(key => {
       const value = search[key];
 
       if (value !== undefined && value !== null && value !== '') {
         if (value && key === 'data_inserimento' || key === 'data_scadenza' || key === 'data_attivazione') {
           const newValue = JSON.parse(value)
-          console.log('newValue: ', newValue)
           const fromDate = newValue.from;
           const toDate = newValue.to;
           query.andWhere(
@@ -905,11 +869,20 @@ WHERE id = ?;
   }
 
 
-  private validateUser(email: string): Promise<User> {
+  private async validateUser(email: string): Promise<User | any> {
 
-    const user = this.usersService.findByUsername(email)
+    const user = await this.usersService.findByUsername(email)
 
     if (!user) throw new NotFoundException('Usuario no encontrado');
+
+    const hasModuleAccess = user.permissions.some(permission =>
+      permission.startsWith('garanzie:')
+    );
+
+    console.log('hasModuleAccess: ', hasModuleAccess)
+    if (!hasModuleAccess) {
+      throw new ForbiddenException('No tienes acceso al módulo de garanzia');
+    }
 
     return user;
   }
@@ -964,7 +937,7 @@ WHERE id = ?;
   }
 
 
-  private async validateExtension(garantiaId: number, user: User) {
+  private async validateExtension(garantiaId: number) {
     const garantiaToExtend = await this.dataSource.query(
       `SELECT * FROM garanzie WHERE id = ?`,
       [garantiaId]
@@ -972,14 +945,6 @@ WHERE id = ?;
 
     if (!garantiaToExtend[0]) {
       throw new NotFoundException('La garantía a extender no fue encontrada');
-    }
-
-    // Validar que el dealer solo pueda extender sus propias garantías
-    if (
-      user.role === 'dealer' &&
-      garantiaToExtend[0].dealer !== parseInt(user.id.split('-')[0])
-    ) {
-      throw new ForbiddenException('No tienes permiso para extender esta garantía');
     }
 
     return garantiaToExtend[0];

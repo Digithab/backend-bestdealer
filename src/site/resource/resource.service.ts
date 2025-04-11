@@ -34,7 +34,7 @@ export class ResourceService {
       throw new Error('Failed to fetch agenti');
     }
   }
-  
+
   async getAgentiDenomizacione() {
     try {
       const agenti = await this.dataSource.createQueryBuilder()
@@ -205,15 +205,14 @@ export class ResourceService {
     return garanzie
   }
 
-  async typeGaranties(id: string) {
+  async typeGaranties(id: any) {
 
-    const garanzie = await this.dataSource.createQueryBuilder()
-      .select('tg.*')
-      .from('tipi_garanzie', 'tg')
-      .where('tg.id = :id', { id })
-      .getRawOne();
+    const [result] = await this.dataSource.query(
+      `SELECT id, denominazione, prezzo_listino FROM tipi_garanzie WHERE id = ?`,
+      [id]
+    );
 
-    return garanzie
+    return result || null;
   }
 
   async updatePrezzo(id: string, prezzo: any, userId: string) {
@@ -253,7 +252,7 @@ export class ResourceService {
 
   }
 
-  private validateUser(email: string): Promise<User> {
+  private validateUser(email: string): Promise<User | any> {
 
     const user = this.usersService.findByUsername(email)
 

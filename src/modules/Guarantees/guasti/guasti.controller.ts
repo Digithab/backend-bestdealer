@@ -10,9 +10,11 @@ import { CreateEventDto } from './dto/create-event.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Express } from 'express';
 import { FtpServiceService } from 'src/ftp-service/ftp-service.service';
+import { Roles } from 'src/modules/auth/roles.decorator';
+import { RolesGuard } from 'src/modules/auth/roles.guard';
 
 @Controller('guarantees/guasti')
-@UseGuards(JwtAuthGuard) // Asegúrate de proteger estas rutas
+@UseGuards(JwtAuthGuard, RolesGuard) // Asegúrate de proteger estas rutas
 export class GuastiController {
   constructor(
     private readonly guastiService: GuastiService,
@@ -20,6 +22,7 @@ export class GuastiController {
   ) { }
 
   @Post()
+  @Roles('admin', 'Super Admin')
   @UseInterceptors(FileInterceptor('file'))
   create(
     @UploadedFile() file: {
@@ -32,32 +35,28 @@ export class GuastiController {
       size: number;
     },
     @Body() createGarantiaDto: Omit<CreateGuastiDto, 'file'>,
-    @Request() req
   ) {
-    console.log('req.email___dasd ', req.email)
-    const email = req.email.email
 
     return this.guastiService.create({
       ...createGarantiaDto,
       file
-    }, email);
+    });
   }
 
   @Post('ricambi')
+  @Roles('admin', 'Super Admin')
   addRicambio(
     @Body() createRicambiDto: CreateRicambiDto,
-    @Request() req
   ) {
-    console.log('req.email___dasd ', req.email)
-    const email = req.email.email
+
 
     return this.guastiService.addRicambio(
-      createRicambiDto,
-      email,
+      createRicambiDto
     );
   }
 
   @Post('event')
+  @Roles('admin', 'Super Admin')
   @UseInterceptors(FileInterceptor('file'))
   addEvent(
     @UploadedFile() file: {
@@ -69,15 +68,12 @@ export class GuastiController {
       size: number;
     },
     @Body() createEventDto: Omit<CreateEventDto, 'file'>,
-    @Request() req
   ) {
-    console.log('req.email___dasd ', req.email)
-    const email = req.email.email
 
     return this.guastiService.addEvent({
       ...createEventDto,
       file
-    }, email);
+    });
   }
 
   @Get()

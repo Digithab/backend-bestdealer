@@ -36,21 +36,24 @@ export class SoccorsiStradaliService {
     @InjectDataSource() private dataSource: DataSource
   ) { }
   async create(createSoccorsiStradaliDto: any, userId?: string) {
+    try {
+      const { SpiaTemperatura, SpiaOlio, SpiaAltro, ...newDto } = createSoccorsiStradaliDto
+      newDto.spie_accese = `${SpiaTemperatura}${SpiaOlio}${SpiaAltro}`
+      newDto.data_fermo = format(newDto.data_fermo, 'yyyy-MM-dd HH:mm:ss');
+      const pf_found = await this.dataSource
+        .createQueryBuilder()
+        .insert()
+        .into('soccorsi')
+        .values(
+          newDto
+        )
+        .execute();
 
-    const { SpiaTemperatura, SpiaOlio, SpiaAltro, ...newDto } = createSoccorsiStradaliDto
-    newDto.spie_accese = `${SpiaTemperatura}${SpiaOlio}${SpiaAltro}`
-    newDto.data_fermo = format(newDto.data_fermo, 'yyyy-MM-dd HH:mm:ss');
-    const pf_found = await this.dataSource
-      .createQueryBuilder()
-      .insert()
-      .into('soccorsi')
-      .values(
-        newDto
-      )
-      .execute();
+      return pf_found
+    } catch (error) {
+      console.log('error___ ', error)
+    }
 
-    console.log('pf_found___ ', pf_found)
-    return console.log('createSoccorsiStradaliDto___ ', newDto)
   }
 
   async getStradali(

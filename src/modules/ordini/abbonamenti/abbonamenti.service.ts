@@ -1,4 +1,4 @@
-import { forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateAbbonamentiDto } from './dto/create-abbonamenti.dto';
 import { UpdateAbbonamentiDto } from './dto/update-abbonamenti.dto';
 import { DataSource, EntityManager, SelectQueryBuilder } from 'typeorm';
@@ -60,21 +60,35 @@ export class AbbonamentiService {
     );
   }
   async create(createAbbonamentiDto: any, userId: string) {
-    return await this.dataSource.transaction(async (manager) => {
-      const user = await this.validateUser(userId);
+    // Validación temprana del usuario
+    const user = await this.validateUser(userId);
+    if (user.role !== 'admin') {
+      throw new ForbiddenException('No tienes permisos para crear un abonamento');
+    }
 
-      const abbonamnenti = createAbbonamentiDto
-      abbonamnenti.data_inserimento = new Date();
-      abbonamnenti.data_inizio_abbonamento = new Date();
+    // Preparar datos del abonamiento
+    const abbonamnenti = {
+      ...createAbbonamentiDto,
+      data_inserimento: new Date(),
+      data_inizio_abbonamento: new Date()
+    };
 
-      const save = await manager
+    let newAbbonamentiId: number;
+    let proformaIds: number[] = [];
+
+    // Ejecutar transacción
+    await this.dataSource.transaction(async (manager) => {
+      // Insertar abonamiento
+      const saveResult = await manager
         .createQueryBuilder()
         .insert()
         .into('ordini__abbonamenti_garanzie')
-        .values(
-          abbonamnenti
-        )
+        .values(abbonamnenti)
         .execute();
+
+      newAbbonamentiId = saveResult.raw?.insertId;
+
+      // Preparar todas las proformas en un array
       for (let i = 0; i <= 12; i++) {
         const proforma = {
           tipo_cliente: 0,
@@ -90,25 +104,29 @@ export class AbbonamentiService {
           pagamento__differita: abbonamnenti.pagamento__differita,
           pagamento__periodo: abbonamnenti.pagamento__periodo,
           abbonamento__mese: i,
-          abbonamento__id: save.raw?.insertId,
+          abbonamento__id: newAbbonamentiId,
           is_deleted: false,
-        }
-        const saveProforma = await manager
+        };
+
+        const result = await manager
           .createQueryBuilder()
           .insert()
           .into('proforma')
-          .values(
-            proforma
-          )
+          .values(proforma)
           .execute();
-        await manager.query('COMMIT');
 
-        console.log('saveProforma.raw?.insertId___ ', saveProforma.raw?.insertId)
-        await this.proformaService.recalcTotaleProforma(saveProforma.raw?.insertId)
+        if (result.raw?.insertId) {
+          proformaIds.push(result.raw.insertId);
+        }
       }
-      await manager.query('COMMIT');
+    });
 
-    })
+    // Recalcular totales en paralelo
+    await Promise.all(
+      proformaIds.map(id => this.proformaService.recalcTotaleProforma(id))
+    );
+
+    return { success: true, abbonamentiId: newAbbonamentiId, proformaIds };
   }
 
   async getAbonamenti(
@@ -118,25 +136,27 @@ export class AbbonamentiService {
     sort: string = 'id',
     order: 'DESC' | 'ASC' = 'DESC'
   ): Promise<{ abbon: any[], total: number }> {
+
     page = Math.max(1, Number(page));
+
     limit = Math.max(1, Math.min(50, Number(limit)));
+
     const validOrder = ['DESC', 'ASC'].includes(order) ? order : 'DESC';
+
     const sortColumn = AbbonamentiSearchKeys.includes(sort) ? sort : 'id';
 
     const query = this.entityManager.createQueryBuilder()
-      .select('oag.*, a.sigla, d.denominazione')
-      .from('ordini__abbonamenti_garanzie', 'oag')
-      .innerJoin('agenti', 'a', 'oag.agente = a.id')
-      .innerJoin('dealers', 'd', 'oag.dealer = d.id');
+      .select('oag.*')
+      .from('vw_abbonamenti', 'oag')
 
     this.applyFilters(query, search);
 
-    // Obtener el total de registros
     const totalQueryBuilder = query.clone();
+
     const totalResult = await totalQueryBuilder.select('COUNT(*)', 'total').getRawOne();
+
     const total = Number(totalResult?.total) || 0;
 
-    // Aplicar ordenación y paginación
     query
       .orderBy(`oag.${sortColumn}`, validOrder as 'DESC' | 'ASC')
       .offset((page - 1) * limit)
@@ -157,8 +177,6 @@ export class AbbonamentiService {
 
     const abbon = await query.getRawOne();
 
-
-
     if (!abbon) {
       throw new NotFoundException(`abbon with ID ${id} not found`)
     }
@@ -167,51 +185,83 @@ export class AbbonamentiService {
   }
 
   async update(id: number, updateAbbonamentiDto: any, userId: string) {
+    // Validar usuario fuera de la transacción para fallar rápido
+    const user = await this.validateUser(userId);
+    if (user.role !== 'admin') {
+      throw new ForbiddenException('No tienes permisos para modificar un abonamento');
+    }
+
     return await this.dataSource.transaction(async (manager) => {
-      const user = await this.validateUser(userId);
-
-      if (user.role !== 'admin') return
-
+      // Obtener el abonamiento a actualizar
       const abbonamenti = await this.findOne(id);
-      console.log('abbonamenti___ ', abbonamenti)
-      const all_proforma = await manager.query('SELECT * FROM proforma WHERE tipo_proforma = 4 AND abbonamento__id', [abbonamenti.id])
-      console.log('all_proforma___ ', all_proforma)
-      let has_fatture = false;
 
-      for (let proforma of all_proforma) {
-        console.log('PRRR__', await manager.query('SELECT * FROM proforma WHERE tipo_proforma = 4 AND abbonamento__id = ?', [proforma.id]))
-        has_fatture = has_fatture || await manager.query('SELECT * FROM proforma WHERE tipo_proforma = 4 AND abbonamento__id = ?', [proforma.id])
+      // Obtener todas las proformas relacionadas con una sola consulta correcta
+      const all_proforma = await manager.query(
+        'SELECT * FROM proforma WHERE tipo_proforma = 4 AND abbonamento__id = ?',
+        [abbonamenti.id]
+      );
 
+      // Verificar si hay facturas asociadas con una sola consulta
+      const facturas = await manager.query(
+        'SELECT COUNT(*) as count FROM fatture WHERE rif_proforma IN (SELECT id FROM proforma WHERE tipo_proforma = 4 AND abbonamento__id = ?)',
+        [abbonamenti.id]
+      );
+
+      if (facturas[0]?.count > 0) {
+        throw new NotFoundException('Non è possibile modificare un abbonamento su cui è già stata emessa fattura');
       }
 
-      if (has_fatture) throw new NotFoundException('Non è possibile modificare un abbonamento su cui è già stata emessa fattura');
-      Object.assign(abbonamenti, updateAbbonamentiDto);
-      await this.entityManager
+      // Actualizar el abonamiento
+      const newAbb = Object.assign(abbonamenti, updateAbbonamentiDto);
+
+      await manager
         .createQueryBuilder()
         .update('ordini__abbonamenti_garanzie')
-        .set(abbonamenti)
+        .set(newAbb)
         .where('id = :id', { id })
         .execute();
-      //calculateProformaDate
-      for (let proforma of all_proforma) {
-        has_fatture = await manager.query('SELECT * FROM proforma WHERE tipo_proforma = 4 AND abbonamento__id = ?', [proforma.id])
-        proforma.data_proforma = this.calculateProformaDate(abbonamenti.data_inizio_abbonamento, proforma.abbonamento__mese, abbonamenti.pagamento__data)
-        proforma.pagamento__rate = abbonamenti.pagamento__rate;
-        proforma.pagamento__differita = abbonamenti.pagamento__differita;
-        proforma.pagamento__periodo = abbonamenti.pagamento__periodo;
-        const id_proforma = proforma.id
-        await this.entityManager
+
+      manager.query('COMMIT;');
+
+
+      // Preparar actualizaciones de proformas
+      const proformaUpdates = all_proforma.map(async (proforma) => {
+        const updatedProforma = {
+          ...proforma,
+          data_proforma: this.calculateProformaDate(
+            newAbb.data_inizio_abbonamento,
+            proforma.abbonamento__mese,
+            newAbb.pagamento__data
+          ),
+          pagamento__rate: newAbb.pagamento__rate,
+          pagamento__differita: newAbb.pagamento__differita,
+          pagamento__periodo: newAbb.pagamento__periodo
+        };
+
+        const id_proforma = proforma.id;
+
+        await manager
           .createQueryBuilder()
           .update('proforma')
-          .set(proforma)
-          .where('id = :id', { id_proforma })
+          .set(updatedProforma)
+          .where('id = :id', { id: id_proforma })
           .execute();
 
-        await this.proformaService.recalcTotaleProforma(id_proforma)
-        //Generar PDF
-      }
-    })
+        return id_proforma;
+      });
 
+      // Ejecutar todas las actualizaciones en paralelo
+      const updatedProformaIds = await Promise.all(proformaUpdates);
+
+      // Recalcular totales en paralelo
+      await Promise.all(
+        updatedProformaIds.map(proformaId =>
+          this.proformaService.recalcTotaleProforma(proformaId)
+        )
+      );
+
+      return { success: true, abbonamentiId: id, updatedProformas: updatedProformaIds };
+    });
   }
 
   async remove(id: number) {
@@ -219,7 +269,7 @@ export class AbbonamentiService {
     const result = await this.dataSource
       .createQueryBuilder()
       .update('ordini__abbonamenti_garanzie')
-      .set({ stato: 1 })
+      .set({ is_deleted: 1 })
       .where("id = :id", { id })
       .execute();
 
@@ -229,7 +279,9 @@ export class AbbonamentiService {
 
     }
 
-    return `Delete complete`;
+    return {
+      message: 'Delete complete'
+    };
 
   }
 
@@ -254,7 +306,7 @@ export class AbbonamentiService {
     });
   }
 
-  private validateUser(email: string): Promise<User> {
+  private validateUser(email: string): Promise<User | any> {
 
     const user = this.usersService.findByUsername(email)
 

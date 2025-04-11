@@ -35,23 +35,17 @@ export class GuastiService {
 
     private ftpServiceService: FtpServiceService
   ) { }
-  async create(createGuastiDto: CreateGuastiDto, userId: string) {
+  async create(createGuastiDto: CreateGuastiDto) {
+    const guastiData = typeof createGuastiDto.guasti === 'string'
+      ? JSON.parse(createGuastiDto.guasti)
+      : createGuastiDto.guasti;
+
+    console.log(guastiData)
+    const { garanzie, stato, data_guasto, descrizione, preventivo_riparazione, costo_riparazione, costo_dealer } = guastiData
+    const data = format(data_guasto, 'yyyy-MM-dd')
+    console.log('data: ', data)
     return await this.dataSource.transaction(async (manager) => {
 
-      const user = await this.validateUser(userId);
-
-      if (user.role !== 'agente' && user.role !== 'admin') {
-        throw new ForbiddenException('No tienes permisos para crear garantías');
-      }
-
-      const guastiData = typeof createGuastiDto.guasti === 'string'
-        ? JSON.parse(createGuastiDto.guasti)
-        : createGuastiDto.guasti;
-
-      console.log(guastiData)
-      const { garanzie, stato, data_guasto, descrizione, preventivo_riparazione, costo_riparazione, costo_dealer } = guastiData
-      const data = format(data_guasto, 'yyyy-MM-dd')
-      console.log('data: ', data)
       const insertedPropietario = await manager.query(
         `INSERT INTO guasti
         (garanzia, stato,data_inserimento ,data_guasto, descrizione,preventivo_riparazione, costo_riparazione, costo_dealer, is_deleted)
@@ -72,52 +66,36 @@ export class GuastiService {
       createGuastiDto.guasto = insertedPropietario.insertId
 
       if (createGuastiDto.data != '' && createGuastiDto.note != '' && createGuastiDto.estensione_file != '') {
-        await this.addEvent(createGuastiDto, userId)
+        await this.addEvent(createGuastiDto)
       }
 
       return { message: "Guasto guardado" }
     })
   }
 
-  async addRicambio(createRicambiDto: CreateRicambiDto, userId: string) {
-    return await this.dataSource.transaction(async (manager) => {
+  async addRicambio(createRicambiDto: CreateRicambiDto) {
 
-      const user = await this.validateUser(userId);
+    const { fornitore, descrizione, data_acquisto, prezzo_acquisto, prezzo_vendita, guasto } = createRicambiDto;
+    console.log('createRicambiDto: ', createRicambiDto)
+    // Usar directamente el objeto desestructurado para evitar repetir valores
+    const values = [fornitore, descrizione, data_acquisto, prezzo_acquisto, prezzo_vendita, guasto, false];
 
-      if (user.role !== 'admin') {
-        throw new ForbiddenException('No tienes permisos para crear event');
-      }
-
-      const { fornitore, descrizione, data_acquisto, prezzo_acquisto, prezzo_vendita, guasto } = createRicambiDto
-      const insertedRicambi = await manager.query(
+    try {
+      await this.dataSource.query(
         `INSERT INTO ricambi
-        (fornitore, descrizione, data_acquisto, prezzo_acquisto, prezzo_vendita, guasto, is_deleted)
-        VALUES (?, ?, ?, ?, ?,?,?)`,
-        [
-          fornitore,
-          descrizione,
-          data_acquisto,
-          prezzo_acquisto,
-          prezzo_vendita,
-          guasto,
-          false
-        ]
+      (fornitore, descrizione, data_acquisto, prezzo_acquisto, prezzo_vendita, guasto, is_deleted)
+      VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        values
       );
 
-      console.log('insertedPropietario__ ', insertedRicambi)
-
-      return { message: "Ricambi guardado" }
-
-    })
+      return { message: "Ricambi guardado" };
+    } catch (error) {
+      // Manejar errores específicamente
+      throw new Error(`Error al guardar ricambi: ${error.message}`);
+    }
   }
 
-  async addEvent(createEventDto: CreateEventDto, userId: string) {
-
-    const user = await this.validateUser(userId);
-
-    if (user.role !== 'admin') {
-      throw new ForbiddenException('No tienes permisos para crear event');
-    }
+  async addEvent(createEventDto: CreateEventDto) {
 
     const { file, ...newDto } = createEventDto
 
@@ -384,7 +362,7 @@ export class GuastiService {
     });
   }
 
-  private validateUser(email: string): Promise<User> {
+  private validateUser(email: string): Promise<User | any> {
 
     const user = this.usersService.findByUsername(email)
 

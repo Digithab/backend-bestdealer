@@ -36,7 +36,7 @@ export class DisponibilitaPacchettiController {
   @Post('notification')
   create(@Body() sel: any, @Request() req,) {
     console.log('sel', sel)
-    const email = req.email.email
+    const email = req.user.email
     return this.disponibilitaPacchettiService.actionNotificaSelezionati(sel, email);
   }
 

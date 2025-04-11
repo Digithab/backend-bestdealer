@@ -12,7 +12,7 @@ export class OrdiniContrConsumoController {
 
   @Post()
   create(@Body() createOrdiniContrConsumoDto: any, @Request() req) {
-    const email = req.email.email
+    const email = req.user.email
     return this.ordiniContrConsumoService.create(createOrdiniContrConsumoDto, email);
   }
 
@@ -52,7 +52,7 @@ export class OrdiniContrConsumoController {
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateOrdiniContrConsumoDto: UpdateOrdiniContrConsumoDto, @Request() req) {
-    const email = req.email.email
+    const email = req.user.email
     return this.ordiniContrConsumoService.update(+id, updateOrdiniContrConsumoDto, email);
   }
 

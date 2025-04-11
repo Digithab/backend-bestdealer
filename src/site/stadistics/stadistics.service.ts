@@ -3,6 +3,22 @@ import { InjectDataSource, InjectEntityManager } from '@nestjs/typeorm';
 import { format } from 'date-fns';
 import { DataSource, EntityManager } from 'typeorm';
 
+export enum TimePeriod {
+  TODAY = 'oggi',
+  WEEK = 'settimana',
+  MONTH = 'mese',
+  YEAR = 'anno',
+}
+
+export interface GarantiaStats {
+  tipo_garanzia: number;
+  cantidad: number;
+  total_venduto: number;
+  prezzo_listino: number;
+  denominazione: string;
+}
+
+
 @Injectable()
 export class StadisticsService {
 
@@ -14,7 +30,7 @@ export class StadisticsService {
 
   async getTabellaIncidenzeProvider(dealerId: number) {
     const today = format(new Date(), 'yyyy-MM-dd');
-// 
+    // 
     // Definir los intervalos de fecha  
     const dateRanges = {
       all: { start: '1900-01-01', end: '3000-01-01' },
@@ -94,7 +110,7 @@ export class StadisticsService {
           total: Number(interval.garanzie),
           attive: Number(interval.garanzie) - Number(interval.garanzie_scadute),
           scadute: Number(interval.garanzie_scadute),
-        }; 
+        };
       } else {
         periodoData.garanzie = {
           total: Number(interval.garanzie),
@@ -137,7 +153,7 @@ export class StadisticsService {
   }
 
 
-  private async getStatisticheDealer(
+  async getStatisticheDealer(
     dealerId: number,
     startDate: string,
     endDate: string
@@ -265,5 +281,57 @@ export class StadisticsService {
       await queryRunner.release();
     }
   }
+
+  async getGarantiaStats(period: TimePeriod = TimePeriod.TODAY): Promise<GarantiaStats[]> {
+    // Construir la condición de fecha basada en el periodo seleccionado
+    let dateCondition: string;
+
+    console.log('period___ ', period)
+
+    switch (period) {
+      case TimePeriod.TODAY:
+        dateCondition = `DATE(g.data_inserimento) = CURDATE()`;
+        break;
+      case TimePeriod.WEEK:
+        dateCondition = `g.data_inserimento >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)`;
+        break;
+      case TimePeriod.MONTH:
+        dateCondition = `g.data_inserimento >= DATE_SUB(CURDATE(), INTERVAL 1 MONTH)`;
+        break;
+      case TimePeriod.YEAR:
+        dateCondition = `g.data_inserimento >= DATE_SUB(CURDATE(), INTERVAL 1 YEAR)`;
+        break;
+      default:
+        dateCondition = `DATE(g.data_inserimento) = CURDATE()`;
+    }
+
+    // Consulta SQL con el filtro de fecha
+    const query = `
+      SELECT 
+        g.tipo_garanzia, 
+        COUNT(*) AS cantidad, 
+        (tg.prezzo_listino * COUNT(*)) AS total_venduto, 
+        tg.prezzo_listino, 
+        tg.denominazione
+      FROM garanzie g
+      JOIN tipi_garanzie tg ON g.tipo_garanzia = tg.id
+      WHERE ${dateCondition}
+      GROUP BY g.tipo_garanzia
+      ORDER BY tg.id ASC
+    `;
+
+    // Ejecutar la consulta
+    const result = await this.dataSource.query(query);
+    return result;
+  }
+
+  // Método para obtener el total de ventas por periodo
+  async getTotalSales(period: TimePeriod = TimePeriod.TODAY): Promise<number> {
+    const stats = await this.getGarantiaStats(period);
+    return stats.reduce((total, item) => total + Number(item.total_venduto), 0);
+  }
+
+
+
 
 }

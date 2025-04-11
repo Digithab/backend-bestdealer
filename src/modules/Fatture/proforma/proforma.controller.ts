@@ -6,9 +6,11 @@ import { ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/modules/auth/jwt-auth.guard';
 import { FtpServiceService } from 'src/ftp-service/ftp-service.service';
 import { Response } from 'express';
+import { RolesGuard } from 'src/modules/auth/roles.guard';
+import { Roles } from 'src/modules/auth/roles.decorator';
 
 @Controller('proforma')
-@UseGuards(JwtAuthGuard) // Asegúrate de proteger estas rutas
+@UseGuards(JwtAuthGuard, RolesGuard) // Asegúrate de proteger estas rutas
 export class ProformaController {
   constructor(
     private readonly proformaService: ProformaService,
@@ -16,36 +18,40 @@ export class ProformaController {
   ) { }
 
   @Post()
-  create(@Body() createProformaDto: CreateProformaDto, @Request() req) {
-    console.log(req.email)
-    const email = req.email.email
-    return this.proformaService.create(createProformaDto, email);
+    @Roles('admin', 'Super Admin')
+  create(@Body() createProformaDto: CreateProformaDto) {
+    
+    return this.proformaService.create(createProformaDto);
   }
 
   @Post('gen-pdf')
+    
   async genPdf(@Body() id: any) {
     return this.proformaService.genPdfProforma(id.id)
   }
 
   @Post('invia-proforma')
-  actionInviaProforma(@Body() id: any, @Request() req) {
-    const email = req.email.email
+  @Roles('admin', 'Super Admin')
+  actionInviaProforma(@Body() id: any) {
+    
 
-    return this.proformaService.actionInviaProforma(id, email)
+    return this.proformaService.actionInviaProforma(id)
   }
 
   @Post('sel-invia-proforma')
-  actionNotificaSelezionati(@Body() sel: any, @Request() req) {
-    const email = req.email.email
+  @Roles('admin', 'Super Admin')
+  actionNotificaSelezionati(@Body() sel: any) {
+    
 
-    return this.proformaService.actionNotificaSelezionati(sel, email)
+    return this.proformaService.actionNotificaSelezionati(sel)
   }
 
   @Get('/finalizza-proforma/:id')
-  actionFinalizzaProforma(@Param() id: any, @Request() req) {
-    const email = req.email.email
+  @Roles('admin', 'Super Admin')
+  actionFinalizzaProforma(@Param() id: any) {
+    
 
-    return this.proformaService.actionFinalizzaProforma(id, email)
+    return this.proformaService.actionFinalizzaProforma(id)
   }
 
   @Get()
@@ -81,31 +87,33 @@ export class ProformaController {
   }
 
   @Get('/recalc-totale/:id')
+  @Roles('admin', 'Super Admin')
   recalcTotaleProforma(@Param('id') id: string) {
     return this.proformaService.recalcTotaleProforma(+id);
   }
 
   @Get('/data-to-fattura/:id')
+  @Roles('admin', 'Super Admin')
   dataToFattura(@Param('id') id: string) {
     return this.proformaService.dataToFattura(+id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateProformaDto: any, @Request() req) {
-    const email = req.email.email
-    return this.proformaService.update(+id, updateProformaDto, email);
+  @Roles('admin', 'Super Admin')
+  update(@Param('id') id: string, @Body() updateProformaDto: any) {
+    
+    return this.proformaService.update(+id, updateProformaDto);
   }
 
   @Delete('update-liberi/:id')
-  removeLiberti(@Param('id') id: string, @Request() req) {
-    const email = req.email.email
-    return this.proformaService.removeLiberti(+id, email);
+  removeLiberti(@Param('id') id: string) {
+    
+    return this.proformaService.removeLiberti(+id);
   }
   @Delete(':id')
-  remove(@Param('id') id: string, @Request() req) {
-    console.log(req.email)
-    const email = req.email.email
-    return this.proformaService.remove(+id, email);
+  remove(@Param('id') id: string) {
+    
+    return this.proformaService.remove(+id);
   }
 
   @Get('download/:id')

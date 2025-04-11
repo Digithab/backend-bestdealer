@@ -17,15 +17,15 @@ export class FattureController {
 
   @Post()
   create(@Body() createFaturreDto: any, @Request() req) {
-    console.log(req.email)
-    const email = req.email.email
+    console.log(req.user)
+    const email = req.user.email
     return this.fattureService.create(createFaturreDto, email);
   }
 
   @Post('nota-credito')
   notaCredio(@Body() data: any, @Request() req) {
     console.log(req.email)
-    const email = req.email.email
+    const email = req.user.email
     return this.fattureService.actionNotaCredito(data, email);
   }
 
@@ -84,13 +84,13 @@ export class FattureController {
   @Delete(':id')
   remove(@Param('id') id: string, @Request() req) {
     console.log(req.email)
-    const email = req.email.email
+    const email = req.user.email
     return this.fattureService.remove(+id, email);
   }
 
   @Post('invia-fattura')
   actionInviaFattura(@Body() id: any, @Request() req) {
-    const email = req.email.email
+    const email = req.user.email
 
     return this.fattureService.actionInviaFattura(id.id, email)
   }

@@ -7,10 +7,12 @@ import { JwtAuthGuard } from 'src/modules/auth/jwt-auth.guard';
 import { SaveCommentoDto } from 'src/interfaces/interfaces';
 import { FtpServiceService } from 'src/ftp-service/ftp-service.service';
 import { Response } from 'express';
+import { RolesGuard } from 'src/modules/auth/roles.guard';
+import { Roles } from 'src/modules/auth/roles.decorator';
 
 
 @Controller('guarantees/garanzie')
-@UseGuards(JwtAuthGuard) // Asegúrate de proteger estas rutas
+@UseGuards(JwtAuthGuard, RolesGuard) // Asegúrate de proteger estas rutas
 export class GaranzieController {
   constructor(
     private readonly garanzieService: GaranzieService,
@@ -18,27 +20,27 @@ export class GaranzieController {
   ) { }
 
   @Post('/newComment')
+  @Roles('admin', 'Super Admin')
   saveComment(
-    @Body() commentDto: SaveCommentoDto,
-    @Request() req
+    @Body() commentDto: SaveCommentoDto
+
   ) {
-    const email = req.email.email
+
     console.log('commentDto___ ', commentDto)
-    return this.garanzieService.newComment(commentDto, email);
+    return this.garanzieService.newComment(commentDto);
   }
 
   @Post(':extend')
+  @Roles('admin', 'Super Admin', 'dealer')
   create(
     @Body() createGarantiaDto: CreateGarantiaDto,
-    @Request() req,
     @Param('extend') extend: string
   ) {
-    console.log('req.email___dasd ', req.email)
-    const email = req.email.email
+
+
 
     return this.garanzieService.create(
       createGarantiaDto,
-      email,
       extend
     );
   }
@@ -77,11 +79,10 @@ export class GaranzieController {
   @Get('getComment/:id')
   getComment(
     @Param('id') id: number,
-    @Request() req
+
   ) {
-    console.log('req.email___ ', req.email)
-    const email = req.email.email
-    return this.garanzieService.getComment(id, email);
+
+    return this.garanzieService.getComment(id);
   }
 
   @Get('/gen-pdf-garanzia/:id')
@@ -90,17 +91,17 @@ export class GaranzieController {
   ) {
     console.log('genPdfGaranzia___ ', id)
     // console.log('req.email___ ', req.email)
-    // const email = req.email.email
+    // 
     return this.garanzieService.genPdfGaranzia(id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateGaranzieDto: any, @Request() req) {
-    const email = req.email.email
+  @Roles('admin', 'Super Admin', 'dealer')
+  update(@Param('id') id: string, @Body() updateGaranzieDto: any) {
+
     return this.garanzieService.update(
       +id,
-      updateGaranzieDto,
-      email
+      updateGaranzieDto
 
     );
   }

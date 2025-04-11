@@ -54,6 +54,7 @@ export interface User {
     [x: string]: any;
     id: string;
     role: string;
+    permissions?: string[];
 }
 
 export class SaveCommentoDto {

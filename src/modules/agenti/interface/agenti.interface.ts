@@ -15,3 +15,5 @@ interface AgentiSearch {
     provvigioni__cards?: number;
     provvigioni__altro?: number;
 }
+
+

@@ -16,13 +16,15 @@ export class AuthService {
     ) { }
 
     async validateUser(email: string, password: string) {
+        console.log('password: ', password)
 
         const user = await this.usersService.findLogin(email)
+        console.log('user: ', user.password)
 
         if (user && bcrypt.compare(password, user.password)) {
 
             const { password, ...result } = user
-            console.log('result___ ', result)
+
             return result;
 
         }
@@ -38,10 +40,10 @@ export class AuthService {
         const user = await this.validateUser(email, password);
 
         if (!user) throw new UnauthorizedException('Invalid credencials');
-
+        console.log('user Auth Service: ', user)
         const payload = user.role === 'agente'
-            ? { email: user.email, sub: user.id, username: user.username, role: user.role, sigla: user.sigla }
-            : { email: user.email, sub: user.id, username: user.username, role: user.role };
+            ? { email: user.email, sub: user.id, username: user.username, role: user.role, sigla: user.sigla, permissions: user.permissions }
+            : { email: user.email, sub: user.id, username: user.username, role: user.role, permissions: user.permissions, sigla: user.agente };
         return {
             access_token: this.jwtService.sign(payload)
         }

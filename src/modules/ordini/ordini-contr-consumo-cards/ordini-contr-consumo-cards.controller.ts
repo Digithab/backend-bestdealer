@@ -13,7 +13,7 @@ export class OrdiniContrConsumoCardsController {
   @Post()
   create(@Body() createOrdiniContrConsumoCardDto: CreateOrdiniContrConsumoCardDto, @Request() req) {
     console.log(req.email)
-    const email = req.email.email
+    const email = req.user.email
     return this.ordiniContrConsumoCardsService.create(createOrdiniContrConsumoCardDto, email);
   }
 
@@ -49,7 +49,7 @@ export class OrdiniContrConsumoCardsController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateOrdiniContrConsumoCardDto: any, @Request() req) {
     console.log(req.email)
-    const email = req.email.email
+    const email = req.user.email
     return this.ordiniContrConsumoCardsService.update(+id, updateOrdiniContrConsumoCardDto, email);
   }
 

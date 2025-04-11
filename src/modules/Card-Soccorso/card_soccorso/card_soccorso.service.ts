@@ -33,173 +33,331 @@ export class CardSoccorsoService {
   ) { }
 
 
-  async create(createCardSoccorsoDto: CreateCardSoccorsoDto | any, userId: string) {
+  // async create(createCardSoccorsoDto: CreateCardSoccorsoDto | any, userId: string) {
 
-    const cardSoccorso = createCardSoccorsoDto.data.CardSoccorso;
-    const vehicolo = createCardSoccorsoDto.data.Veicoli;
-    const clienti = createCardSoccorsoDto.data.Clienti;
+  //   const cardSoccorso = createCardSoccorsoDto.data.CardSoccorso;
+  //   const vehicolo = createCardSoccorsoDto.data.Veicoli;
+  //   const clienti = createCardSoccorsoDto.data.Clienti;
+  //   let prezzo_card = 0;
+  //   let prezzo_rest = 0;
+  //   let card_da_pagare = false;
+  //   let rest_da_pagare = false;
+  //   let pf_found: any
+  //   let id_card_soccorso: any;
+  //   const result = await this.dataSource.transaction(async (manager) => {
+
+  //     const user = await this.validateUser(userId);
+  //     if (user.role !== 'dealer' && user.role !== 'admin') {
+  //       throw new ForbiddenException('No tienes permisos para crear garantías');
+  //     }
+
+  //     const today = new Date()
+
+  //     cardSoccorso.data_attivazione = today;
+  //     cardSoccorso.data_scadenza = add(today, { years: 1 });
+  //     cardSoccorso.stato = 1;
+  //     cardSoccorso.id_proforma = 0;
+  //     cardSoccorso.id_proforma_restituzione = 0;
+  //     cardSoccorso.is_deleted = false;
+
+  //     if (user.role === 'dealer') {
+
+  //       cardSoccorso.dealer = user.id.split('-')[0];
+  //       cardSoccorso.data_scadenza = add(today, { years: 1 });
+  //     }
+
+  //     clienti.abilitazione_proforma = false;
+  //     vehicolo.targa_originaria = '-'
+
+  //     const dealer = await this.findDealer(cardSoccorso.dealer)
+
+  //     if (cardSoccorso.tipo_card === 'C') cardSoccorso.restituzione = 0;
+
+  //     clienti.abilitazione_proforma = false;
+  //     clienti.agente = cardSoccorso.agente;
+  //     clienti.denominazione = clienti.denominazione.toUpperCase();
+
+  //     const clientiSave = await manager
+  //       .createQueryBuilder()
+  //       .insert()
+  //       .into('clienti')
+  //       .values(
+  //         clienti
+  //       )
+  //       .execute();
+  //     const { raw: { insertId } } = clientiSave;
+  //     const idClient = insertId
+
+  //     vehicolo.cliente = idClient;
+  //     cardSoccorso.proprietario = idClient;
+
+  //     const { marcaId, modeloId } = await this.processVehicleBrands(vehicolo, manager);
+
+  //     vehicolo.immatricolazione = format(vehicolo.immatricolazione, "yyyy-MM-dd")
+
+  //     const { modelo, ...newDtoVehicolo } = vehicolo
+  //     const vehicoloSave = await manager
+  //       .createQueryBuilder()
+  //       .insert()
+  //       .into('veicoli')
+  //       .values(
+  //         newDtoVehicolo
+  //       )
+  //       .execute();
+
+
+  //     cardSoccorso.veicolo = vehicoloSave.raw?.insertId;
+  //     cardSoccorso.data_inserimento = today;
+
+  //     // Controllo disponibilità di card ss per il dealer e il tipo di card specificati
+  //     const disponibilita = await this.disponibilitaPacchettiCardService.findTotalAcquistate(cardSoccorso.dealer, cardSoccorso.tipo_card)
+  //     console.log('disponibilita::: ', disponibilita)
+  //     // Controllo presenza restituzione in Card S.S.
+  //     if (cardSoccorso.restituzione > 0) {
+  //       const tipi_restituzione = [0, 'RR', 'RN'];
+  //       const tipi_restituzione_contratti = [0, "rest_regionale", "rest_nazionale"];
+
+  //       const valid = await this.disponibilitaPacchettiCardService.findTotalAcquistate(cardSoccorso.dealer, tipi_restituzione[cardSoccorso.restituzione])
+  //       if (valid) {
+  //         rest_da_pagare = true
+  //         prezzo_rest = await this.ordiniContrConsumoCardsService.getPrezzoSoccorso(cardSoccorso.dealer, cardSoccorso.tipo_card, tipi_restituzione_contratti[cardSoccorso.restituzione])
+  //       }
+  //     }
+
+  //     if (disponibilita > 0) { // // Viene considerata come card da pacchetto
+  //       cardSoccorso.id_proforma = 0;
+  //     } else { // Viene considerata come card a consumo
+  //       card_da_pagare = true;
+  //       console.log('Llega aqui')
+  //       // Viene letto il prezzo delle card a consumo per il dealer e il tipo card selezionati
+  //       prezzo_card = await this.ordiniContrConsumoCardsService.getPrezzoSoccorso(cardSoccorso.dealer, cardSoccorso.tipo_card, cardSoccorso.data_attivazione)
+  //     }
+  //     // Controllo data del proforma per il dealer selezionato
+  //     console.log('prezzo_rest', prezzo_rest)
+  //     console.log('rest_da_pagare', rest_da_pagare)
+  //     console.log('card_da_pagare', card_da_pagare)
+  //     if (card_da_pagare || rest_da_pagare) {
+  //       console.log('!dealer.data_proforma_singole_garanzie___ ', !dealer.data_proforma_singole_garanzie)
+  //       if (!dealer.data_proforma_singole_garanzie) {
+  //         pf_found = await manager.query(
+  //           `SELECT * FROM proforma 
+  //             WHERE tipo_cliente = ? 
+  //             AND id_cliente = ? 
+  //             AND tipo_proforma = ? 
+  //             AND DATE(data_proforma) = DATE(?)`,
+  //           [0, cardSoccorso.dealer, 2, new Date()]);
+
+  //         if (pf_found[0]) {
+  //           cardSoccorso.id_proforma = pf_found[0].id
+  //           let tot_new_proforma = parseFloat(pf_found[0].importo) +  // Importo precedente Proforma
+  //             prezzo_card +          // Importo Card SS
+  //             prezzo_rest;           // Importo Restituzione
+
+  //           // Actualiza el importe mostrado en la tabla del proforma
+  //           pf_found[0].importo = tot_new_proforma.toFixed(2); // Formatea a dos decimales con un punto como separador
+  //           tot_new_proforma = 0;
+  //         } else { // Se non trovata ne viene creata una
+  //           pf_found = await manager.query(
+  //             `INSERT INTO proforma
+  //             (tipo_cliente, id_cliente,agente,tipo_proforma, importo, data_inserimento, data_proforma,  data_invio, pagamento__rate, pagamento__differita, pagamento__periodo, is_deleted)
+  //             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  //             [0, cardSoccorso.dealer, cardSoccorso.agente, 2, (prezzo_card + prezzo_rest), new Date(), new Date(), new Date(), dealer.pagamento__rate, dealer.pagamento__differita, dealer.pagamento__periodo, false]);
+  //         }
+
+  //       } else { // Proforma immediato
+
+  //         pf_found = await manager.query(
+  //           `INSERT INTO proforma
+  //             (tipo_cliente, id_cliente, agente, tipo_proforma, importo, data_inserimento, data_proforma,  data_invio, pagamento__rate, pagamento__differita, pagamento__periodo, is_deleted)
+  //             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  //           [0, cardSoccorso.dealer, cardSoccorso.agente, 2, (prezzo_card + prezzo_rest), new Date(), new Date(), new Date(), dealer.pagamento__rate, dealer.pagamento__differita, dealer.pagamento__periodo, false]);
+  //         console.log('pf_found___ ', pf_found[0])
+  //         console.log('********************************************')
+  //         console.log('Pasa por aqui y crea la proforma')
+  //         console.log('********************************************')
+  //       }
+  //       console.log('pf_found___ ', pf_found)
+  //       console.log('card_da_pagare___ ', card_da_pagare)
+  //       if (card_da_pagare) cardSoccorso.id_proforma = pf_found.insertId;
+
+  //       if (rest_da_pagare) cardSoccorso.id_proforma_restituzione = pf_found.insertId;
+
+  //     }
+  //     console.log('INSERTANDO CARD SOCCORSO: ', cardSoccorso)
+  //     id_card_soccorso = await manager
+  //       .createQueryBuilder()
+  //       .insert()
+  //       .into('card_soccorso_2')
+  //       .values(
+  //         cardSoccorso
+  //       )
+  //       .execute();
+  //   })
+
+  //   if (card_da_pagare || rest_da_pagare) {
+  //     await this.proformaService.genPdfProforma(pf_found.insertId);
+  //   }
+  //   console.log('id_card_soccorso___ ', id_card_soccorso.raw?.insertId)
+  //   await this.genPdfCardSoccorso(id_card_soccorso.raw?.insertId)
+
+  //   return result;
+  // }
+
+  async create(createCardSoccorsoDto: CreateCardSoccorsoDto | any) {
+    const { CardSoccorso: cardSoccorsoData, Veicoli: vehicoloData, Clienti: clientiData } = createCardSoccorsoDto.data;
+    console.log('createCardSoccorsoDto.data: ', createCardSoccorsoDto.data)
+    // Variables para tracking
     let prezzo_card = 0;
     let prezzo_rest = 0;
     let card_da_pagare = false;
     let rest_da_pagare = false;
-    let pf_found: any
-    let id_card_soccorso: any;
-    const result = await this.dataSource.transaction(async (manager) => {
+    let proformaResult: any;
+    let cardSoccorsoId: any;
 
-      const user = await this.validateUser(userId);
-      if (user.role !== 'dealer' && user.role !== 'admin') {
-        throw new ForbiddenException('No tienes permisos para crear garantías');
+    return await this.dataSource.transaction(async (manager) => {
+
+      // 2. Preparar datos para Card Soccorso
+      const today = new Date();
+      const cardSoccorso = {
+        ...cardSoccorsoData,
+        data_attivazione: today,
+        data_scadenza: add(today, { years: 1 }),
+        data_inserimento: today,
+        stato: 1,
+        id_proforma: 0,
+        id_proforma_restituzione: 0,
+        is_deleted: false
+      };
+      
+
+      // Si es tipo C, no hay restitución
+      if (cardSoccorso.tipo_card === 'C') {
+        cardSoccorso.restituzione = 0;
       }
 
-      const today = new Date()
+      // 3. Preparar datos del cliente
+      const clienti = {
+        ...clientiData,
+        abilitazione_proforma: false,
+        agente: cardSoccorso.agente,
+        denominazione: clientiData.denominazione.toUpperCase()
+      };
 
-      cardSoccorso.data_attivazione = today;
-      cardSoccorso.data_scadenza = add(today, { years: 1 });
-      cardSoccorso.stato = 1;
-      cardSoccorso.id_proforma = 0;
-      cardSoccorso.id_proforma_restituzione = 0;
-      cardSoccorso.is_deleted = false;
-
-      if (user.role === 'dealer') {
-        cardSoccorso.dealer = user.id;
-        cardSoccorso.data_scadenza = add(today, { years: 1 });
-      }
-
-      clienti.abilitazione_proforma = false;
-      vehicolo.targa_originaria = '-'
-
-      const dealer = await this.findDealer(cardSoccorso.dealer)
-
-      if (cardSoccorso.tipo_card === 'C') cardSoccorso.restituzione = 0;
-
-      clienti.abilitazione_proforma = false;
-      clienti.agente = cardSoccorso.agente;
-      clienti.denominazione = clienti.denominazione.toUpperCase();
-
-      const clientiSave = await manager
+      // 4. Guardar cliente
+      const clientiResult = await manager
         .createQueryBuilder()
         .insert()
         .into('clienti')
-        .values(
-          clienti
-        )
+        .values(clienti)
         .execute();
-      const { raw: { insertId } } = clientiSave;
-      const idClient = insertId
 
-      vehicolo.cliente = idClient;
-      cardSoccorso.proprietario = idClient;
+      const idClient = clientiResult.raw.insertId;
 
+      // 5. Preparar y guardar vehículo
+      const vehicolo = {
+        ...vehicoloData,
+        cliente: idClient,
+        targa_originaria: '-',
+        immatricolazione: format(vehicoloData.immatricolazione, "yyyy-MM-dd")
+      };
+
+      // Procesar marcas y modelos
       const { marcaId, modeloId } = await this.processVehicleBrands(vehicolo, manager);
 
-      vehicolo.immatricolazione = format(vehicolo.immatricolazione, "yyyy-MM-dd")
-
-      const { modelo, ...newDtoVehicolo } = vehicolo
-      const vehicoloSave = await manager
+      // Guardar vehículo
+      const { modelo, ...vehicoloToSave } = vehicolo;
+      const vehicoloResult = await manager
         .createQueryBuilder()
         .insert()
         .into('veicoli')
-        .values(
-          newDtoVehicolo
-        )
+        .values(vehicoloToSave)
         .execute();
 
+      // 6. Completar datos de Card Soccorso
+      cardSoccorso.veicolo = vehicoloResult.raw.insertId;
+      cardSoccorso.proprietario = idClient;
 
-      cardSoccorso.veicolo = vehicoloSave.raw?.insertId;
-      cardSoccorso.data_inserimento = today;
+      // 7. Procesar disponibilidad y precios
+      const dealer = await this.findDealer(cardSoccorso.dealer);
 
-      // Controllo disponibilità di card ss per il dealer e il tipo di card specificati
-      const disponibilita = await this.disponibilitaPacchettiCardService.findTotalAcquistate(cardSoccorso.dealer, cardSoccorso.tipo_card)
-      console.log('disponibilita::: ', disponibilita)
-      // Controllo presenza restituzione in Card S.S.
+      // Verificar disponibilidad de card
+      const disponibilita = await this.disponibilitaPacchettiCardService.findTotalAcquistate(
+        cardSoccorso.dealer,
+        cardSoccorso.tipo_card
+      );
+
+      // 8. Procesar restitución si aplica
       if (cardSoccorso.restituzione > 0) {
         const tipi_restituzione = [0, 'RR', 'RN'];
         const tipi_restituzione_contratti = [0, "rest_regionale", "rest_nazionale"];
 
-        const valid = await this.disponibilitaPacchettiCardService.findTotalAcquistate(cardSoccorso.dealer, tipi_restituzione[cardSoccorso.restituzione])
+        const valid = await this.disponibilitaPacchettiCardService.findTotalAcquistate(
+          cardSoccorso.dealer,
+          tipi_restituzione[cardSoccorso.restituzione]
+        );
+
         if (valid) {
-          rest_da_pagare = true
-          prezzo_rest = await this.ordiniContrConsumoCardsService.getPrezzoSoccorso(cardSoccorso.dealer, cardSoccorso.tipo_card, tipi_restituzione_contratti[cardSoccorso.restituzione])
+          rest_da_pagare = true;
+          prezzo_rest = await this.ordiniContrConsumoCardsService.getPrezzoSoccorso(
+            cardSoccorso.dealer,
+            cardSoccorso.tipo_card,
+            tipi_restituzione_contratti[cardSoccorso.restituzione]
+          );
         }
       }
 
-      if (disponibilita > 0) { // // Viene considerata come card da pacchetto
-        cardSoccorso.id_proforma = 0;
-      } else { // Viene considerata come card a consumo
+      // 9. Verificar si la card es de paquete o a consumo
+      if (disponibilita <= 0) {
         card_da_pagare = true;
-        console.log('Llega aqui')
-        // Viene letto il prezzo delle card a consumo per il dealer e il tipo card selezionati
-        prezzo_card = await this.ordiniContrConsumoCardsService.getPrezzoSoccorso(cardSoccorso.dealer, cardSoccorso.tipo_card, cardSoccorso.data_attivazione)
+        prezzo_card = await this.ordiniContrConsumoCardsService.getPrezzoSoccorso(
+          cardSoccorso.dealer,
+          cardSoccorso.tipo_card,
+          cardSoccorso.data_attivazione
+        );
       }
-      // Controllo data del proforma per il dealer selezionato
-      console.log('prezzo_rest', prezzo_rest)
-      console.log('rest_da_pagare', rest_da_pagare)
-      console.log('card_da_pagare', card_da_pagare)
+
+      // 10. Crear o actualizar proforma si es necesario
       if (card_da_pagare || rest_da_pagare) {
-        console.log('!dealer.data_proforma_singole_garanzie___ ', !dealer.data_proforma_singole_garanzie)
-        if (!dealer.data_proforma_singole_garanzie) {
-          pf_found = await manager.query(
-            `SELECT * FROM proforma 
-              WHERE tipo_cliente = ? 
-              AND id_cliente = ? 
-              AND tipo_proforma = ? 
-              AND DATE(data_proforma) = DATE(?)`,
-            [0, cardSoccorso.dealer, 2, new Date()]);
+        proformaResult = await this.handleProforma(
+          manager,
+          dealer,
+          cardSoccorso,
+          prezzo_card,
+          prezzo_rest
+        );
 
-          if (pf_found[0]) {
-            cardSoccorso.id_proforma = pf_found[0].id
-            let tot_new_proforma = parseFloat(pf_found[0].importo) +  // Importo precedente Proforma
-              prezzo_card +          // Importo Card SS
-              prezzo_rest;           // Importo Restituzione
-
-            // Actualiza el importe mostrado en la tabla del proforma
-            pf_found[0].importo = tot_new_proforma.toFixed(2); // Formatea a dos decimales con un punto como separador
-            tot_new_proforma = 0;
-          } else { // Se non trovata ne viene creata una
-            pf_found = await manager.query(
-              `INSERT INTO proforma
-              (tipo_cliente, id_cliente,agente,tipo_proforma, importo, data_inserimento, data_proforma,  data_invio, pagamento__rate, pagamento__differita, pagamento__periodo, is_deleted)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [0, cardSoccorso.dealer, cardSoccorso.agente, 2, (prezzo_card + prezzo_rest), new Date(), new Date(), new Date(), dealer.pagamento__rate, dealer.pagamento__differita, dealer.pagamento__periodo, false]);
-          }
-
-        } else { // Proforma immediato
-
-          pf_found = await manager.query(
-            `INSERT INTO proforma
-              (tipo_cliente, id_cliente, agente, tipo_proforma, importo, data_inserimento, data_proforma,  data_invio, pagamento__rate, pagamento__differita, pagamento__periodo, is_deleted)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [0, cardSoccorso.dealer, cardSoccorso.agente, 2, (prezzo_card + prezzo_rest), new Date(), new Date(), new Date(), dealer.pagamento__rate, dealer.pagamento__differita, dealer.pagamento__periodo, false]);
-          console.log('pf_found___ ', pf_found[0])
-          console.log('********************************************')
-          console.log('Pasa por aqui y crea la proforma')
-          console.log('********************************************')
+        if (card_da_pagare) {
+          cardSoccorso.id_proforma = proformaResult.insertId || proformaResult[0]?.id;
         }
-        console.log('pf_found___ ', pf_found)
-        console.log('card_da_pagare___ ', card_da_pagare)
-        if (card_da_pagare) cardSoccorso.id_proforma = pf_found.insertId;
 
-        if (rest_da_pagare) cardSoccorso.id_proforma_restituzione = pf_found.insertId;
-
+        if (rest_da_pagare) {
+          cardSoccorso.id_proforma_restituzione = proformaResult.insertId || proformaResult[0]?.id;
+        }
       }
-      console.log('INSERTANDO CARD SOCCORSO: ', cardSoccorso)
-      id_card_soccorso = await manager
+
+      // 11. Guardar Card Soccorso
+      const cardSoccorsoResult = await manager
         .createQueryBuilder()
         .insert()
         .into('card_soccorso_2')
-        .values(
-          cardSoccorso
-        )
+        .values(cardSoccorso)
         .execute();
-    })
 
-    if (card_da_pagare || rest_da_pagare) {
-      await this.proformaService.genPdfProforma(pf_found.insertId);
-    }
-    console.log('id_card_soccorso___ ', id_card_soccorso.raw?.insertId)
-    await this.genPdfCardSoccorso(id_card_soccorso.raw?.insertId)
+      cardSoccorsoId = cardSoccorsoResult.raw.insertId;
 
-    return result;
+      return { cardSoccorsoId, proformaId: proformaResult?.insertId };
+    }).then(async (result) => {
+      // Procesamiento posterior a la transacción
+      if ((card_da_pagare || rest_da_pagare) && proformaResult?.insertId) {
+        await this.proformaService.genPdfProforma(proformaResult.insertId);
+      }
+
+      if (cardSoccorsoId) {
+        await this.genPdfCardSoccorso(cardSoccorsoId);
+      }
+
+      return result;
+    });
   }
 
   async getCardSoccorso(
@@ -570,7 +728,7 @@ export class CardSoccorsoService {
     });
   }
 
-  private validateUser(email: string): Promise<User> {
+  private validateUser(email: string): Promise<User | any> {
 
     const user = this.usersService.findByUsername(email)
 
@@ -629,23 +787,48 @@ export class CardSoccorsoService {
   }
 
   async genPdfCardSoccorso(id: any) {
-    console.log('id___ ', id)
-    const [card_soccorso] = await this.entityManager.query('SELECT * FROM card_soccorso_2 WHERE id = ?', [id])
-    // card_soccorso.id = Number(card_soccorso.id + 15000)
-    console.log('card_soccorso___ ', card_soccorso)
-    const [dealer] = await this.entityManager.query('SELECT * FROM dealers WHERE id = ?', [card_soccorso.dealer])
-    const [comune_dealer] = await this.entityManager.query('SELECT * FROM comuni WHERE id = ?', [dealer.comune])
-    const [contatto_dealer] = await this.entityManager.query('SELECT * FROM dealers__contatti WHERE dealer = ?', [card_soccorso.dealer])
-    const [client] = await this.entityManager.query('select * from clienti c where c.id = ?', [card_soccorso.proprietario])
+    console.log('id___ ', id);
 
-    const [comune_proprietario] = await this.entityManager.query('SELECT * FROM comuni WHERE id = ?', [client.comune])
-    const [veicoli] = await this.entityManager.query('SELECT * FROM veicoli WHERE id = ?', [card_soccorso.veicolo])
-    console.log('veicoli___ ', veicoli)
-    const [modello_veicolo] = await this.entityManager.query('SELECT * FROM veicoli__modelli WHERE id = ?', [veicoli.modello])
-    console.log('modello_veicolo___ ', modello_veicolo)
-    const [marca_veicolo] = await this.entityManager.query('SELECT nome FROM veicoli__marche WHERE id = ?', [modello_veicolo.marca])
-    const modello_o = modello_veicolo.nome
-    const [veicolo] = await this.entityManager.query('SELECT * FROM veicoli WHERE id = ?', [card_soccorso.veicolo])
+    // Get card_soccorso data first to extract needed IDs
+    const [card_soccorso] = await this.entityManager.query('SELECT * FROM card_soccorso_2 WHERE id = ?', [id]);
+    // card_soccorso.id = Number(card_soccorso.id + 15000)
+    console.log('card_soccorso___ ', card_soccorso);
+
+    // Run these queries in parallel with Promise.all
+    const [
+      [dealer],
+      [contatto_dealer],
+      [client],
+      [veicoli]
+    ] = await Promise.all([
+      this.entityManager.query('SELECT * FROM dealers WHERE id = ?', [card_soccorso.dealer]),
+      this.entityManager.query('SELECT * FROM dealers__contatti WHERE dealer = ?', [card_soccorso.dealer]),
+      this.entityManager.query('select * from clienti c where c.id = ?', [card_soccorso.proprietario]),
+      this.entityManager.query('SELECT * FROM veicoli WHERE id = ?', [card_soccorso.veicolo])
+    ]);
+
+    console.log('veicoli___ ', veicoli);
+
+    // Run the second batch of parallel queries
+    const [
+      [comune_dealer],
+      [comune_proprietario],
+      [modello_veicolo]
+    ] = await Promise.all([
+      this.entityManager.query('SELECT * FROM comuni WHERE id = ?', [dealer.comune]),
+      this.entityManager.query('SELECT * FROM comuni WHERE id = ?', [client.comune]),
+      this.entityManager.query('SELECT * FROM veicoli__modelli WHERE id = ?', [veicoli.modello])
+    ]);
+
+    console.log('modello_veicolo___ ', modello_veicolo);
+
+    // Get marca_veicolo
+    const [marca_veicolo] = await this.entityManager.query('SELECT nome FROM veicoli__marche WHERE id = ?', [modello_veicolo.marca]);
+
+    const modello_o = modello_veicolo.nome;
+
+    // No need to query veicolo again as it's already stored in 'veicoli'
+    const veicolo = veicoli;
 
     const data = {
       dealer: dealer,
@@ -659,8 +842,46 @@ export class CardSoccorsoService {
       modello_o: modello_o,
       veicolo: veicolo
     }
-    await this.genPdfService.generateCardSoccorsoPdf('card_soccorso.template', data)
 
-    return 'Garanzia generada y subida con éxito'
+    await this.genPdfService.generateCardSoccorsoPdf('card_soccorso.template', data);
+    return 'Garanzia generada y subida con éxito';
+  }
+
+  private async handleProforma(manager, dealer, cardSoccorso, prezzo_card, prezzo_rest) {
+    const importoTotale = prezzo_card + prezzo_rest;
+
+    if (!dealer.data_proforma_singole_garanzie) {
+      // Buscar proforma existente para hoy
+      const proformaFound = await manager.query(
+        `SELECT * FROM proforma 
+       WHERE tipo_cliente = ? 
+       AND id_cliente = ? 
+       AND tipo_proforma = ? 
+       AND DATE(data_proforma) = DATE(?)`,
+        [0, cardSoccorso.dealer, 2, new Date()]
+      );
+
+      if (proformaFound.length > 0) {
+        // Actualizar proforma existente
+        const newImporto = parseFloat(proformaFound[0].importo) + importoTotale;
+        await manager.query(
+          `UPDATE proforma SET importo = ? WHERE id = ?`,
+          [newImporto.toFixed(2), proformaFound[0].id]
+        );
+        return proformaFound;
+      }
+    }
+
+    // Crear nueva proforma
+    return await manager.query(
+      `INSERT INTO proforma
+     (tipo_cliente, id_cliente, agente, tipo_proforma, importo, 
+      data_inserimento, data_proforma, data_invio, 
+      pagamento__rate, pagamento__differita, pagamento__periodo, is_deleted)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [0, cardSoccorso.dealer, cardSoccorso.agente, 2, importoTotale,
+        new Date(), new Date(), new Date(),
+        dealer.pagamento__rate, dealer.pagamento__differita, dealer.pagamento__periodo, false]
+    );
   }
 }

@@ -359,7 +359,7 @@ export class OrdiniPachettiCardsService {
     });
   }
 
-  private validateUser(email: string): Promise<User> {
+  private validateUser(email: string): Promise<User | any> {
 
     const user = this.usersService.findByUsername(email)
 

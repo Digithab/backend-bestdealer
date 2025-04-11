@@ -52,19 +52,12 @@ export class ProformaService {
 
 
 
-  async create(createProformaDto: any, userId) {
-    let id
+  async create(createProformaDto: any) {
 
-    const user = await this.validateUser(userId);
-
-    if (user.role !== 'admin') return
-
-    const result = await this.dataSource.transaction(async (manager) => {
-
-
+    const proformaId = await this.dataSource.transaction(async (manager) => {
       const model = createProformaDto;
-      console.log('model__ ', model)
 
+      // Actualizar cliente y crear proforma en una sola transacción
       if (model.tipo_cliente === 1) {
         await manager
           .createQueryBuilder()
@@ -74,7 +67,9 @@ export class ProformaService {
           .execute();
       }
 
-      const proforma = {
+      // Preparar proforma sin filas
+      //@ts-ignore
+      const { rows, ...modelWithoutRows } = {
         ...model,
         tipo_proforma: 5,
         data_inserimento: new Date(),
@@ -85,45 +80,40 @@ export class ProformaService {
         pagamento__differita: 30,
         is_deleted: false,
         importo: 0
-      }
+      };
 
-      const { rows, ...modelWithoutRows } = proforma
-
+      // Insertar proforma
       const pf_found = await manager
         .createQueryBuilder()
         .insert()
         .into('proforma')
-        .values(
-          modelWithoutRows
-        )
+        .values(modelWithoutRows)
         .execute();
 
-      if (pf_found) {
-        for (let row of rows) {
-          // row.proforma =
-          row.is_deleted = false
-          row.proforma = pf_found.raw?.insertId
-          await manager
-            .createQueryBuilder()
-            .insert()
-            .into('proforma__liberi_rows')
-            .values(
-              row
-            )
-            .execute();
-        }
+      const proformaId = pf_found.raw?.insertId;
 
+      // Insertar todas las filas en una sola operación en lugar de múltiples operaciones individuales
+      if (proformaId && rows?.length > 0) {
+        const rowsWithProformaId = rows.map(row => ({
+          ...row,
+          proforma: proformaId,
+          is_deleted: false
+        }));
 
+        await manager
+          .createQueryBuilder()
+          .insert()
+          .into('proforma__liberi_rows')
+          .values(rowsWithProformaId)
+          .execute();
       }
 
-      id = pf_found.raw?.insertId
+      // Recalcular y generar PDF después de la transacción      
+      return proformaId;
+    });
 
-    })
-
-    await this.recalcTotaleProforma(id)
-    await this.genPdfProforma(id)
-
-    return result
+    await this.recalcTotaleProforma(proformaId);
+    await this.genPdfProforma(proformaId);
   }
 
   async getProforma(
@@ -193,15 +183,12 @@ export class ProformaService {
     return { ...result, rows };
   }
 
-  async update(id: number, updateProformaDto: any, userId: string) {
+  async update(id: number, updateProformaDto: any) {
     return await this.dataSource.transaction(async (manager) => {
-      const user = await this.validateUser(userId);
 
-      if (user.role !== 'admin') return
       const request = updateProformaDto;
-      console.log('request___ ', request)
+
       const { rows, ...modelWithoutRows } = request
-      console.log('rows___ ', rows)
 
       await manager
         .createQueryBuilder()
@@ -239,11 +226,11 @@ export class ProformaService {
     })
   }
 
-  async removeLiberti(id: number, userId: any) {
+  async removeLiberti(id: number) {
     return await this.dataSource.transaction(async (manager) => {
-      const user = await this.validateUser(userId);
 
-      if (user.role !== 'admin') return
+
+
 
       const model = this.findOne(id);
 
@@ -261,11 +248,11 @@ export class ProformaService {
     })
   }
 
-  async remove(id: number, userId: any) {
+  async remove(id: number) {
     return await this.dataSource.transaction(async (manager) => {
-      const user = await this.validateUser(userId);
 
-      if (user.role !== 'admin') return
+
+
 
       const [proforma] = await manager.query('SELECT * FROM proforma WHERE id = ?', [id])
       console.log('proforma__ ', proforma)
@@ -312,11 +299,11 @@ export class ProformaService {
     })
   }
 
-  async actionFinalizzaProforma(id: number, userId: any) {
+  async actionFinalizzaProforma(id: number) {
     return await this.dataSource.transaction(async (manager) => {
-      const user = await this.validateUser(userId);
 
-      if (user.role !== 'admin') return
+
+
 
       await manager
         .createQueryBuilder()
@@ -344,14 +331,14 @@ export class ProformaService {
   }
 
   async recalcTotaleProforma(id: number) {
-    console.log('recalcTotaleProforma___ ', id)
+
     return await this.dataSource.transaction(async (manager) => {
 
-      const value = await manager.query(
-        'SELECT * FROM proforma WHERE id = ?',
+      const [value] = await manager.query(
+        'SELECT id, tipo_proforma, abbonamento__id FROM proforma WHERE id = ?',
         [id]
       );
-      const model = value[0]
+      const model = value
 
       if (!model) {
         throw new NotFoundException('Proforma non trovato.');
@@ -541,11 +528,14 @@ export class ProformaService {
 
           break;
         case 4: // Abbonamenti Garanzie          
-          const abbonamento = await manager.query('SELECT * FROM ordini__abbonamenti_garanzie WHERE id = ?', [model.abbonamento__id])
-          const ddc_prz = Number(abbonamento[0].ddc_prz) || 0;
-          const gest_prz = Number(abbonamento[0].gest_prz) || 0;
-          const ddc_qta = Number(abbonamento[0].ddc_qta) || 0;
-          const gest_qta = Number(abbonamento[0].gest_qta) || 0;
+          const [abbonamento] = await manager.query(`
+            SELECT ddc_prz, gest_prz, ddc_qta, gest_qta FROM ordini__abbonamenti_garanzie WHERE id = ?`
+            , [model.abbonamento__id])
+
+          const ddc_prz = Number(abbonamento.ddc_prz) || 0;
+          const gest_prz = Number(abbonamento.gest_prz) || 0;
+          const ddc_qta = Number(abbonamento.ddc_qta) || 0;
+          const gest_qta = Number(abbonamento.gest_qta) || 0;
 
           let value = 0
           if (ddc_qta !== 0) {
@@ -555,6 +545,7 @@ export class ProformaService {
           if (gest_qta !== 0) {
             value += Number(gest_prz)
           }
+
           await this.entityManager
             .createQueryBuilder()
             .update('proforma')
@@ -567,19 +558,15 @@ export class ProformaService {
           break;
         case 5: // Libere
 
-          const rows = await manager.query('SELECT * FROM proforma__liberi_rows WHERE proforma = ?  AND is_deleted = false', [model.id]);
-
-          this.totale_pf = rows.reduce((acc, row) =>
-            acc + Number(row.prezzo_unitario) * Number(row.quantita), 0);
-
-          await this.entityManager
-            .createQueryBuilder()
-            .update('proforma')
-            .set({
-              importo: this.totale_pf.toFixed(2)
-            })
-            .where('id = :id', { id })
-            .execute();
+          await manager.query(`
+          UPDATE proforma p 
+          SET p.importo = (
+            SELECT ROUND(SUM(prezzo_unitario * quantita), 2) 
+            FROM proforma__liberi_rows 
+            WHERE proforma = ? AND is_deleted = false
+          )
+          WHERE p.id = ?
+        `, [model.id, id]);
           break;
         case 10: // Garanzie - import
         case 11: // Pack Garanzie import
@@ -652,13 +639,8 @@ export class ProformaService {
   }
 
 
-  async actionInviaProforma(id: any, userId: any) {
+  async actionInviaProforma(id: any) {
 
-    const user = await this.validateUser(userId);
-
-    if (user.role !== 'admin') {
-      throw new ForbiddenException('No tienes permisos para crear garantías');
-    }
 
     const [proforma] = await this.entityManager.query('SELECT * FROM proforma WHERE id = ?', [id.id]);
     let to = '';
@@ -731,13 +713,8 @@ export class ProformaService {
 
   }
 
-  async actionNotificaSelezionati(sel: any, userId: any) {
+  async actionNotificaSelezionati(sel: any) {
 
-    const user = await this.validateUser(userId);
-
-    if (user.role !== 'admin') {
-      throw new ForbiddenException('No tienes permisos para crear garantías');
-    }
 
     for (let id of sel) {
 
@@ -814,87 +791,73 @@ export class ProformaService {
   }
 
   async genPdfProforma(id: any) {
-
+    // Obtener datos de proforma con una consulta única
     const [model] = await this.entityManager.query('SELECT * FROM proforma WHERE id = ?', [id]);
-    console.log('model:::::: ', model)
+
     if (!model) {
       throw new NotFoundException('Proforma non trovato.');
     }
 
+    // Verificar si el importe es cero y actualizar el estado si es necesario
     if (model.importo === '0.00' || model.importo === '0') {
       await this.entityManager
         .createQueryBuilder()
         .update('fatture')
         .set({ is_deleted: true })
-        .where('id = :id', { id: id })
+        .where('id = :id', { id })
         .execute();
     }
 
-    let cliente: any;
-    console.log('model.tipo_cliente__ ', model.tipo_cliente)
+    // Determinar qué tabla consultar basada en el tipo de cliente
+    let tableName, errorPrefix;
     switch (model.tipo_cliente) {
-      case 0: // Dealer        
-        console.log('Deberia entrar aqui')
-        const [_cliente] = await this.entityManager.query('SELECT * FROM dealers WHERE id = ?', [model.id_cliente]);
-        if (!_cliente) throw new NotFoundException('Dealer non trovato (' + model.id_cliente + ')');
-
-        const [_citta] = await this.entityManager.query('SELECT * FROM comuni WHERE id = ?', [_cliente.comune]);
-
-        if (!_citta) throw new NotFoundException('Comune non trovato (' + _cliente.comune + ')');
-        cliente = {
-          rag_sociale: _cliente.denominazione,
-          indirizzo: _cliente.indirizzo,
-          civico: _cliente.civico,
-          cap: _cliente.cap,
-          citta: _citta.citta,
-          provincia: _citta.provincia
-        }
+      case 0:
+        tableName = 'dealers';
+        errorPrefix = 'Dealer';
         break;
-      case 1: // Cliente
-        const [clienteResult] = await this.entityManager.query('SELECT * FROM clienti WHERE id = ?', [model.id_cliente]);
-
-        if (!clienteResult) throw new NotFoundException('Dealer non trovato (' + model.id_cliente + ')');
-
-        const [citta] = await this.entityManager.query('SELECT * FROM comuni WHERE id = ?', [clienteResult.comune]);
-
-        if (!citta) throw new NotFoundException('Comune non trovato (' + clienteResult.comune + ')');
-        cliente = {
-          rag_sociale: clienteResult.denominazione,
-          indirizzo: clienteResult.indirizzo,
-          civico: clienteResult.civico,
-          cap: clienteResult.cap,
-          citta: citta.citta,
-          provincia: citta.provincia
-        }
+      case 1:
+        tableName = 'clienti';
+        errorPrefix = 'Cliente';
         break;
-      case 2: // Centro convenzionato
-        const [result] = await this.entityManager.query('SELECT * FROM centri_convenzionati WHERE id = ?', [model.id_cliente]);
-        if (!result) throw new NotFoundException('Officina non trovata (' + model.id_cliente + ')');
-
-        const [citta_result] = await this.entityManager.query('SELECT * FROM comuni WHERE id = ?', [result.comune]);
-        if (!citta_result) throw new NotFoundException('Comune non trovato (' + result.comune + ')');
-
-        cliente = {
-          rag_sociale: result.denominazione,
-          indirizzo: result.indirizzo,
-          civico: result.civico,
-          cap: result.cap,
-          citta: citta_result.citta,
-          provincia: citta_result.provincia
-        }
+      case 2:
+        tableName = 'centri_convenzionati';
+        errorPrefix = 'Officina';
         break;
       default:
         throw new NotFoundException('Tipo cliente sconosciuto (' + model.tipo_cliente + ')');
     }
-    console.log('Llega aqui')
-    const proforma = await this.createCorpoProforma(model, true)
 
+    // Realizar una única consulta JOIN para obtener cliente y ciudad
+    const [clienteData] = await this.entityManager.query(`
+    SELECT c.denominazione, c.indirizzo, c.civico, c.cap, 
+           com.citta, com.provincia
+    FROM ${tableName} c
+    JOIN comuni com ON c.comune = com.id
+    WHERE c.id = ?
+  `, [model.id_cliente]);
+
+    if (!clienteData) {
+      throw new NotFoundException(`${errorPrefix} non trovato (${model.id_cliente})`);
+    }
+
+    // Estructurar datos del cliente
+    const cliente = {
+      rag_sociale: clienteData.denominazione,
+      indirizzo: clienteData.indirizzo,
+      civico: clienteData.civico,
+      cap: clienteData.cap,
+      citta: clienteData.citta,
+      provincia: clienteData.provincia
+    };
+
+    // Generar cuerpo de proforma y PDF
+    const proforma = await this.createCorpoProforma(model, true);
     const pdfBuffer = await this.genPdfService.generatePdf('proforma.template', { cliente, proforma });
 
     return pdfBuffer;
   }
 
-  private validateUser(email: string): Promise<User> {
+  private validateUser(email: string): Promise<User | any> {
 
     const user = this.usersService.findByUsername(email)
 
@@ -1163,18 +1126,37 @@ export class ProformaService {
   }
 
   async dataToFattura(id: any) {
-    const [proforma] = await this.entityManager.query('SELECT * FROM proforma WHERE id = ?', [id]);
+    // Realizar todas las consultas en paralelo para mejorar el rendimiento
+    const [proformaResult, incassatoResult, fatturatoResult, ultimaFatturaResult] = await Promise.all([
+      this.entityManager.query('SELECT importo, saldo FROM v_proforma WHERE id = ?', [id]),
+      this.entityManager.query('SELECT COALESCE(SUM(f.incasso), 0) AS incasso FROM fatture f WHERE f.rif_proforma = ?', [id]),
+      this.entityManager.query('SELECT COALESCE(SUM(f.importo_ft), 0) AS futt FROM fatture f WHERE f.rif_proforma = ?', [id]),
+      this.entityManager.query('SELECT MAX(f.data_fattura) as ultima FROM fatture f WHERE f.rif_proforma = ?', [id])
+    ]);
 
-    const tot_proforma = Number(proforma.importo) + Math.round(proforma.importo * 0.22);
-    const [incassato] = await this.entityManager.query('select COALESCE(SUM(f.incasso), 0) AS incasso from fatture f where f.rif_proforma = ?', [id]);
-    const [fatturato] = await this.entityManager.query('select COALESCE(SUM(f.importo_ft), 0) AS futt from fatture f where f.rif_proforma = ?', [id]);
-    const { incasso } = incassato;
-    const { futt } = fatturato;
-    const da_saldare = Number(tot_proforma - futt).toFixed(2).replace('.', ',');
-    const da_incassare = Number(tot_proforma - incasso).toFixed(2).replace('.', ',');
-    const [ultima_fattura] = await this.entityManager.query('SELECT MAX(f.data_fattura) as ultima FROM fatture f WHERE f.rif_proforma = ?', [id]);
-    const { ultima } = ultima_fattura;
-    return { proforma, tot_proforma, incasso, futt, da_saldare, da_incassare, ultima }
+    // Obtener los valores de los resultados de consulta
+    const proforma = proformaResult[0];
+    const incasso = Number(incassatoResult[0].incasso || 0);
+    const futt = Number(fatturatoResult[0].futt || 0);
+    const ultima = ultimaFatturaResult[0].ultima;
+
+    // Convertir el saldo a número para asegurarnos que es un valor numérico
+    const importo = Number(proforma.importo);
+    const tot_proforma = Math.round((importo + importo * 0.22) * 100) / 100;
+
+    // Calcular valores derivados, asegurando que son números
+    const da_saldare = (tot_proforma - futt).toFixed(2).replace('.', ',');
+    const da_incassare = (tot_proforma - incasso).toFixed(2).replace('.', ',');
+
+    return {
+      proforma,
+      tot_proforma: tot_proforma.toFixed(2),
+      incasso: incasso.toFixed(2),
+      futt: futt.toFixed(2),
+      da_saldare,
+      da_incassare,
+      ultima
+    };
   }
 
 

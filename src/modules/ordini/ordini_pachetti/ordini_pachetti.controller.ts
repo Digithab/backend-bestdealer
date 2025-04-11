@@ -13,7 +13,7 @@ export class OrdiniPachettiController {
   @Post()
   create(@Body() createOrdiniPachettiDto: any, @Request() req) {
     console.log(req.email)
-    const email = req.email.email
+    const email = req.user.email
     return this.ordiniPachettiService.create(createOrdiniPachettiDto, email);
   }
 
@@ -59,7 +59,7 @@ export class OrdiniPachettiController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateOrdiniPachettiDto: any, @Request() req) {
     console.log(req.email)
-    const email = req.email.email
+    const email = req.user.email
     return this.ordiniPachettiService.update(+id, updateOrdiniPachettiDto, email);
   }
 

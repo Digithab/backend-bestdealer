@@ -83,7 +83,7 @@ export class ResourceController {
 
   @Patch('site/type/:id')
   updatePrezzo(@Param('id') id: string, @Body() Dto: any, @Request() req) {
-    const email = req.email.email
+    const email = req.user.email
     const { prezzo_listino } = Dto
     console.log('prezzo: ', prezzo_listino)
     return this.resourceService.updatePrezzo(id, prezzo_listino, email);
@@ -131,7 +131,7 @@ export class ResourceController {
     @Request() req
   ) {
     console.log('req.email___dasd ', req.email)
-    const email = req.email.email
+    const email = req.user.email
 
     return this.resourceService.uploadFile({
       ...createDto,

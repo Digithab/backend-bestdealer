@@ -7,6 +7,7 @@ export class User {
     username: string;
     password: string;
     role: string;
+    permissions?: string[]; // Añadir permisos
     sigla?: string;
 
 }

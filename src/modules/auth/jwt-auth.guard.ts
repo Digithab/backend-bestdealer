@@ -3,12 +3,14 @@ import { Observable } from 'rxjs';
 import * as request from 'supertest';
 import { JwtService } from '@nestjs/jwt';
 import { jwtConstants } from './constants';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
 
   constructor(
-    private jwtService: JwtService
+    private jwtService: JwtService,
+    private user: UsersService
   ) { }
   async canActivate(context: ExecutionContext): Promise<boolean> {
 
@@ -27,7 +29,16 @@ export class JwtAuthGuard implements CanActivate {
         }
       )
 
-      request['email'] = payload
+      console.log('payload ', payload)
+      const userName = payload.role === 'agente' ? payload.sigla : payload.email
+      console.log('userName ', userName)
+      const user = await this.user.findByUsername(userName);
+
+      if (!user) {
+        throw new UnauthorizedException();
+      }
+
+      request.user = user;
 
     } catch (error) {
       throw new UnauthorizedException()

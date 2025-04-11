@@ -32,11 +32,13 @@ import { OrdiniContrConsumoModule } from './modules/ordini/ordini-contr-consumo/
 import { OrdiniPachettiCardsModule } from './modules/ordini/ordini_pachetti_cards/ordini_pachetti_cards.module';
 import { FattureModule } from './modules/Fatture/faturre/fatture.module';
 import { GenPdfModule } from './modules/gen-pdf/gen-pdf.module';
+import { RoleModule } from './modules/role/role.module';
 
 
 
 @Module({
   imports: [
+    RoleModule,
     AuthModule,
     UsersModule,
     TypeOrmModule.forRoot(typeOrmConfig),

@@ -6,8 +6,6 @@ import * as Excel from 'exceljs';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as ExcelJS from 'exceljs';
-import { OrdiniContrConsumoService } from '../ordini/ordini-contr-consumo/ordini-contr-consumo.service';
-import { OrdiniContrConsumoCardsService } from '../ordini/ordini-contr-consumo-cards/ordini-contr-consumo-cards.service';
 
 interface CommissionRates {
   best: number;
@@ -191,23 +189,23 @@ export class ReportsService {
   }
 
   async calculateAgentCommissions(agentId: number, month: string, year: string) {
-    // Get agent commission rates
+    // Get agent commission rates - no change needed here
     const agent = await this.entityManager.query(`
-      SELECT 
-        provvigioni__best as best,
-        provvigioni__gest as gest, 
-        provvigioni__ddc as ddc,
-        provvigioni__addons as addons,
-        provvigioni__altro as other,
-        provvigioni__cards as cards,
-        denominazione as name
-      FROM agenti 
-      WHERE id = ?
-    `, [agentId]);
+    SELECT
+      provvigioni__best as best,
+      provvigioni__gest as gest,
+      provvigioni__ddc as ddc,
+      provvigioni__addons as addons,
+      provvigioni__altro as other,
+      provvigioni__cards as cards,
+      denominazione as name
+    FROM agenti
+    WHERE id = ?
+  `, [agentId]);
 
     // Get all proformas for the agent in given month/year
     const proformas = await this.entityManager.query(`
-      SELECT 
+    SELECT
         p.id,
         p.tipo_proforma as type,
         p.id_cliente as clientId,
@@ -217,28 +215,44 @@ export class ReportsService {
       WHERE p.agente = ?
         AND MONTH(p.data_proforma) = ?
         AND YEAR(p.data_proforma) = ?
-    `, [agentId, month, year]);
+  `, [agentId, month, year]);
 
-    const results = [];
+    console.log('proformas___ ', proformas)
 
-    for (const proforma of proformas) {
+
+    // Extraer todos los IDs de clientes únicos
+    const clientIds = [...new Set(proformas.map(p => p.clientId))];
+    const clientTypes = [...new Set(proformas.map(p => p.clientType))];
+
+    console.log('clientIds___ ', clientIds)
+    console.log('clientTypes___ ', clientTypes)
+    // Cargar información de todos los clientes en una sola consulta
+    const clients = await this.loadClientsInBatch(clientIds, clientTypes);
+
+
+    // Procesar todas las proformas en paralelo
+    const resultsPromises = proformas.map(async proforma => {
       const revenue = await this.calculateRevenue(proforma);
       const commissions = this.calculateCommissionAmount(revenue, agent[0]);
 
-      const client = await this.getClientInfo(proforma.clientId, proforma.clientType);
+      // Buscar cliente en caché en lugar de hacer una consulta
+      const clientKey = `${proforma.clientId}_${proforma.clientType}`;
+      const client = clients[clientKey] || {};
 
-      results.push({
+      return {
         proformaId: proforma.id,
         type: this.getProformaType(proforma.type),
-        client: client.denominazione,
+        client: client.denominazione || '',
         date: proforma.date,
         commissionRates: agent[0],
         revenue,
         commissions,
         totalRevenue: this.calculateTotal(revenue),
         totalCommission: this.calculateTotal(commissions)
-      });
-    }
+      };
+    });
+
+    const results = await Promise.all(resultsPromises);
 
     return {
       agentName: agent[0].name,
@@ -247,6 +261,28 @@ export class ReportsService {
       details: results,
       summary: this.calculateSummary(results)
     };
+  }
+
+  // Método para cargar clientes en lote
+  async loadClientsInBatch(clientIds, clientTypes) {
+    // Crear una consulta parametrizada dinámica basada en los IDs disponibles
+    // Este es un enfoque simplificado, podrías necesitar ajustar según tu esquema
+    if (clientIds.length === 0) return {};
+
+    const placeholders = clientIds.map(() => '?').join(',');
+    const clients = await this.entityManager.query(`
+    SELECT id, tipo_persona, denominazione
+    FROM clienti
+    WHERE id IN (${placeholders})
+  `, [...clientIds]);
+
+    // Crear un mapa para acceso rápido
+    const clientMap = {};
+    clients.forEach(client => {
+      clientMap[`${client.id}_${client.tipo_persona}`] = client;
+    });
+
+    return clientMap;
   }
 
   private async calculateRevenue(proforma: any): Promise<Revenue> {
@@ -355,7 +391,8 @@ export class ReportsService {
     const [client] = await this.entityManager.query(`
       SELECT denominazione FROM ${table} WHERE id = ?
     `, [clientId]);
-    return client;
+
+    return client || { denominazione: null };;
   }
 
   private async getWarrantyPrice(dealer: number, type: any, date: string) {

@@ -9,6 +9,8 @@ import { Transform } from 'class-transformer';
 import { JwtAuthGuard } from 'src/modules/auth/jwt-auth.guard';
 import { Response } from 'express';
 import { FtpServiceService } from 'src/ftp-service/ftp-service.service';
+import { RolesGuard } from 'src/modules/auth/roles.guard';
+import { Roles } from 'src/modules/auth/roles.decorator';
 
 class IdParam {
   @IsInt()
@@ -18,7 +20,7 @@ class IdParam {
 }
 
 @Controller('card-soccorso')
-@UseGuards(JwtAuthGuard) // Asegúrate de proteger estas rutas
+@UseGuards(JwtAuthGuard, RolesGuard) // Asegúrate de proteger estas rutas
 export class CardSoccorsoController {
   constructor(
     private readonly cardSoccorsoService: CardSoccorsoService,
@@ -26,11 +28,12 @@ export class CardSoccorsoController {
   ) { }
 
   @Post()
-  create(@Body() createCardSoccorsoDto: CreateCardSoccorsoDto, @Request() req
+  @Roles('admin', 'Super Admin', 'dealer')
+  create(@Body() createCardSoccorsoDto: CreateCardSoccorsoDto
   ) {
-    console.log('req.email___dasd ', req.email)
-    const email = req.email.email
-    return this.cardSoccorsoService.create(createCardSoccorsoDto, email);
+    
+    
+    return this.cardSoccorsoService.create(createCardSoccorsoDto);
   }
 
   @Get()
@@ -63,7 +66,7 @@ export class CardSoccorsoController {
   ) {
     console.log('genPdfSoccorso___ ', id)
     // console.log('req.email___ ', req.email)
-    // const email = req.email.email
+    // const email = req.user.email
     return this.cardSoccorsoService.genPdfCardSoccorso(id);
   }
 
@@ -81,8 +84,8 @@ export class CardSoccorsoController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateCardSoccorsoDto: UpdateCardSoccorsoDto, @Request() req
   ) {
-    console.log('req.email___dasd ', req.email)
-    const email = req.email.email
+    
+    const email = req.user.email
     return this.cardSoccorsoService.update(+id, updateCardSoccorsoDto, email);
   }
 
