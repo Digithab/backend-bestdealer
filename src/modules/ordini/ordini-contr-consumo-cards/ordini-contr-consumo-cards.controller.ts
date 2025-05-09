@@ -4,17 +4,19 @@ import { CreateOrdiniContrConsumoCardDto } from './dto/create-ordini-contr-consu
 import { UpdateOrdiniContrConsumoCardDto } from './dto/update-ordini-contr-consumo-card.dto';
 import { ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/modules/auth/jwt-auth.guard';
+import { RolesGuard } from 'src/modules/auth/roles.guard';
+import { Roles } from 'src/modules/auth/roles.decorator';
 
 @Controller('ordini-contr-consumo-cards')
-@UseGuards(JwtAuthGuard) // Asegúrate de proteger estas rutas
+@UseGuards(JwtAuthGuard, RolesGuard) // Asegúrate de proteger estas rutas
 export class OrdiniContrConsumoCardsController {
   constructor(private readonly ordiniContrConsumoCardsService: OrdiniContrConsumoCardsService) { }
 
   @Post()
-  create(@Body() createOrdiniContrConsumoCardDto: CreateOrdiniContrConsumoCardDto, @Request() req) {
-    console.log(req.email)
-    const email = req.user.email
-    return this.ordiniContrConsumoCardsService.create(createOrdiniContrConsumoCardDto, email);
+  @Roles('admin', 'Super Admin')
+  create(@Body() createOrdiniContrConsumoCardDto: CreateOrdiniContrConsumoCardDto) {
+
+    return this.ordiniContrConsumoCardsService.create(createOrdiniContrConsumoCardDto);
   }
 
   @Get()
@@ -47,10 +49,9 @@ export class OrdiniContrConsumoCardsController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateOrdiniContrConsumoCardDto: any, @Request() req) {
-    console.log(req.email)
-    const email = req.user.email
-    return this.ordiniContrConsumoCardsService.update(+id, updateOrdiniContrConsumoCardDto, email);
+  @Roles('admin', 'Super Admin')
+  update(@Param('id') id: string, @Body() updateOrdiniContrConsumoCardDto: any) {
+    return this.ordiniContrConsumoCardsService.update(+id, updateOrdiniContrConsumoCardDto);
   }
 
   @Delete(':id')

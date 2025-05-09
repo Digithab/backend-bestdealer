@@ -6,10 +6,11 @@ import { DataSource, EntityManager, SelectQueryBuilder } from 'typeorm';
 import { User } from 'src/interfaces/interfaces';
 import { OrdiniCardSearch } from './interface/ordini_pachetti_cards.interface';
 import { UsersService } from 'src/modules/users/users.service';
-import { ProformaService } from 'src/modules/Fatture/proforma/proforma.service';
 import { MailService } from 'src/mail/mail.service';
 import { GenPdfService } from 'src/modules/gen-pdf/gen-pdf.service';
 import { format } from 'date-fns';
+import { ProformaService } from 'src/modules/Fatture/proforma/proforma.service';
+import { WrapperType } from 'src/generate-metadata';
 
 
 export const OrdiniSearchCardKeys = [
@@ -24,6 +25,8 @@ export const OrdiniSearchCardKeys = [
 export class OrdiniContrConsumoCardsService {
 
   constructor(
+    @Inject(forwardRef(() => ProformaService))
+    private proformaService: WrapperType<ProformaService>,
 
     @InjectEntityManager() private entityManager: EntityManager,
 
@@ -31,14 +34,12 @@ export class OrdiniContrConsumoCardsService {
 
     private readonly usersService: UsersService,
 
-    @Inject(forwardRef(() => MailService))
-    private mailService: MailService,
-
     @Inject(forwardRef(() => GenPdfService))
-    private genPdfService: GenPdfService,
+    private readonly genPdfService: WrapperType<GenPdfService>,
 
-    @Inject(forwardRef(() => ProformaService))
-    private proformaService: ProformaService,
+    @Inject(forwardRef(() => MailService))
+    private readonly mailService: WrapperType<MailService>,
+
 
   ) { }
 
@@ -114,10 +115,8 @@ export class OrdiniContrConsumoCardsService {
     }
   }
 
-  async create(createOrdiniContrConsumoCardDto: any, userId: any) {
-    const user = await this.validateUser(userId);
+  async create(createOrdiniContrConsumoCardDto: any) {
 
-    if (user.role !== 'admin') return
 
     const model = createOrdiniContrConsumoCardDto;
     model.data_inserimento = format(new Date(), 'yyyy-MM-dd')
@@ -186,39 +185,43 @@ export class OrdiniContrConsumoCardsService {
     return ordini
   }
 
-  async update(id: number, updateOrdiniContrConsumoCardDto: any, userId: any) {
-    return await this.dataSource.transaction(async (manager) => {
-      const user = await this.validateUser(userId);
-
-      if (user.role !== 'admin') return
-
-      const model = updateOrdiniContrConsumoCardDto;
-      console.log('model::::___', model)
-      console.log('ID::::___', id)
-      const is_update = await manager
+  async update(id: number, updateOrdiniContrConsumoCardDto: any) {
+    return this.dataSource.transaction(async (manager) => {
+      // Actualización de la tabla
+      const result = await manager
         .createQueryBuilder()
         .update('ordini__contratti_a_consumo_cardss')
-        .set(model)
+        .set(updateOrdiniContrConsumoCardDto)
         .where("id = :id", { id })
         .execute();
 
-      console.log('is_update___ ', is_update)
-      if (is_update) {
-        const proformaDaModificare = await
-          manager.query(
-            `select pf.* from proforma pf
-              where pf.tipo_cliente = 0
-              and pf.id_cliente = 2
-              and pf.tipo_proforma = 2
-              and pf.is_deleted = false
-              and(SELECT COUNT(id) FROM fatture WHERE fatture.rif_proforma = pf.id) = 0`,
-            [model.dealer])
-        console.log('proformaDaModificare___ ', proformaDaModificare)
-        for (let proforma of proformaDaModificare) {
-          await this.proformaService.recalcTotaleProforma(proforma.id)
+      // Si la actualización fue exitosa
+      if (result.affected > 0) {
+        // Consulta más específica y segura usando parámetros
+        const proformaDaModificare = await manager.query(`
+        SELECT pf.* 
+        FROM proforma pf
+        WHERE pf.tipo_cliente = 0
+          AND pf.id_cliente = 2
+          AND pf.tipo_proforma = 2
+          AND pf.is_deleted = false
+          AND (SELECT COUNT(id) FROM fatture WHERE fatture.rif_proforma = pf.id) = 0
+      `);
+
+        // Procesar resultados usando Promise.all para ejecución en paralelo
+        if (proformaDaModificare.length > 0) {
+          await Promise.all(
+            proformaDaModificare.map(proforma =>
+              this.proformaService.recalcTotaleProforma(proforma.id)
+            )
+          );
         }
+
+        return { success: true, affected: result.affected };
       }
-    })
+
+      return { success: false, affected: 0 };
+    });
   }
 
   remove(id: number) {

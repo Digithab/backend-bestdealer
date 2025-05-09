@@ -4,17 +4,18 @@ import { CreateOrdiniPachettiCardDto } from './dto/create-ordini_pachetti_card.d
 import { UpdateOrdiniPachettiCardDto } from './dto/update-ordini_pachetti_card.dto';
 import { ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/modules/auth/jwt-auth.guard';
+import { RolesGuard } from 'src/modules/auth/roles.guard';
+import { Roles } from 'src/modules/auth/roles.decorator';
 
 @Controller('ordini-pachetti-cards')
-@UseGuards(JwtAuthGuard) // Asegúrate de proteger estas rutas
+@UseGuards(JwtAuthGuard, RolesGuard) 
 export class OrdiniPachettiCardsController {
   constructor(private readonly ordiniPachettiCardsService: OrdiniPachettiCardsService) { }
 
   @Post()
-  create(@Body() createOrdiniPachettiCardDto: CreateOrdiniPachettiCardDto, @Request() req) {
-    console.log(req.email)
-    const email = req.user.email
-    return this.ordiniPachettiCardsService.create(createOrdiniPachettiCardDto, email);
+  @Roles('admin', 'Super Admin')
+  create(@Body() createOrdiniPachettiCardDto: CreateOrdiniPachettiCardDto) {    
+    return this.ordiniPachettiCardsService.create(createOrdiniPachettiCardDto);
   }
 
   @Get()
@@ -52,10 +53,9 @@ export class OrdiniPachettiCardsController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateOrdiniPachettiCardDto: UpdateOrdiniPachettiCardDto, @Request() req) {
-    console.log(req.email)
-    const email = req.user.email
-    return this.ordiniPachettiCardsService.update(+id, updateOrdiniPachettiCardDto, email);
+  @Roles('admin', 'Super Admin')
+  update(@Param('id') id: string, @Body() updateOrdiniPachettiCardDto: UpdateOrdiniPachettiCardDto) {    
+    return this.ordiniPachettiCardsService.update(+id, updateOrdiniPachettiCardDto);
   }
 
   @Delete(':id')

@@ -3,20 +3,20 @@ import { OrdiniContrConsumoCardsService } from './ordini-contr-consumo-cards.ser
 import { OrdiniContrConsumoCardsController } from './ordini-contr-consumo-cards.controller';
 import { UsersModule } from 'src/modules/users/users.module';
 import { ProformaModule } from 'src/modules/Fatture/proforma/proforma.module';
-import { ProformaService } from 'src/modules/Fatture/proforma/proforma.service';
 import { GaranzieModule } from 'src/modules/Guarantees/garanzie/garanzie.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MailModule } from 'src/mail/mail.module';
-import { MailService } from 'src/mail/mail.service';
 import { GenPdfModule } from 'src/modules/gen-pdf/gen-pdf.module';
+import { OrdiniContrConsumoService } from '../ordini-contr-consumo/ordini-contr-consumo.service';
+import { OrdiniContrConsumoModule } from '../ordini-contr-consumo/ordini-contr-consumo.module';
 
 @Module({
   imports: [
+    forwardRef(() => ProformaModule),
     TypeOrmModule,
     UsersModule,
-    forwardRef(() => ProformaModule),
     forwardRef(() => MailModule),
-    forwardRef(() => GenPdfModule)
+    forwardRef(() => GenPdfModule),
   ],
   controllers: [OrdiniContrConsumoCardsController],
   providers: [OrdiniContrConsumoCardsService],

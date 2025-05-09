@@ -356,7 +356,7 @@ export class ReportsService {
 
       case 2: // Assistance Cards
         const cards = await this.entityManager.query(`
-          SELECT * FROM card_soccorso 
+          SELECT * FROM card_soccorso_2
           WHERE id_proforma = ?
         `, [proforma.id]);
 
@@ -403,9 +403,9 @@ export class ReportsService {
   private async getCardPrice(dealer: number, type: string, date: string) {
     const [contract] = await this.entityManager.query(`
       SELECT prezzo_card 
-      FROM ordini_contr_consumo_cards 
+      FROM ordini__contratti_a_consumo_cardss 
       WHERE dealer = ? 
-        AND ? BETWEEN data_inizio AND data_fine
+        AND ? BETWEEN data_inizio_contratto AND data_fine_contratto
     `, [dealer, date]);
     return contract?.prezzo_card || 0;
   }

@@ -46,110 +46,119 @@ export class OrdiniPachettiCardsService {
 
   ) { }
 
-  async create(createOrdiniPachettiCardDto: any, userId: any) {
-    return await this.dataSource.transaction(async (manager) => {
-      const user = await this.validateUser(userId);
+  async create(createOrdiniPachettiCardDto: any) {
+    createOrdiniPachettiCardDto.data_attivazione = format(new Date(createOrdiniPachettiCardDto.data_attivazione), 'yyyy-MM-dd');
+    createOrdiniPachettiCardDto.data_scadenza = format(new Date(createOrdiniPachettiCardDto.data_scadenza), 'yyyy-MM-dd');
+    const model = {
+      ...createOrdiniPachettiCardDto,
+      data_inserimento: format(new Date(), 'yyyy-MM-dd'),
+      id_proforma: 0,
+      is_deleted: false
+    };
 
-      if (user.role !== 'admin') return
+    const { cardData, ...filteredModel } = model;
+    console.log('filteredModel: ', filteredModel)
 
-      const model = createOrdiniPachettiCardDto;
-      model.data_inserimento = new Date();
-      model.id_proforma = 0;
-      model.is_deleted = false;
-
-      console.log('model___ ', model)
-      let importo_tot = 0;
-
-      const { cardData, ...filteredModel } = model;
-
-      console.log('filteredModel___ ', filteredModel)
-      const is_saved = await manager
+    return this.dataSource.transaction(async (manager) => {
+      // Insert main order
+      const orderResult = await manager
         .createQueryBuilder()
         .insert()
         .into('ordini__pacchetti_cardss')
-        .values(
-          filteredModel
-        )
+        .values(filteredModel)
         .execute();
-      await manager.query('COMMIT');
 
-      const filteredCardData = Object.entries(model.cardData)
+      const orderId = orderResult.raw?.insertId;
+      console.log('orderId: ', orderId)
+
+      // Filter and prepare card data
+      const filteredCardData = Object.entries(cardData)
         .filter(([_, item]) => (item as CardItem).quantita > 0)
-        .map(([key, item]) => ({
-          soccorso: key,
-          prezzo: (item as CardItem).prezzo,
-          quantita: (item as CardItem).quantita,
-          prezzo_netto: (item as CardItem).netto,
-          totale: (item as CardItem).totale,
-          ordine: is_saved.raw?.insertId,
-          omaggio: (item as CardItem).omaggio || 0,
-        }));
+        .map(([key, item]) => {
+          const cardItem = item as CardItem;
+          return {
+            soccorso: key,
+            prezzo: cardItem.prezzo,
+            quantita: cardItem.quantita,
+            prezzo_netto: cardItem.netto,
+            totale: cardItem.totale,
+            ordine: orderId,
+            omaggio: cardItem.omaggio || 0,
+          };
+        });
 
-      console.log('Provaaa______: ', filteredCardData)
+      // Calculate total amount
+      const importoTot = filteredCardData.reduce((sum, card) => sum + card.totale, 0);
 
-      // if (is_saved) {
-      let index = 0
-      for (let card of filteredCardData) {
-        console.log('card____: ', card)
+      // Batch insert card quantities
+      if (filteredCardData.length > 0) {
+        // Especificar explícitamente los nombres de las columnas en la sentencia INSERT
+        const columns = ['soccorso', 'quantita', 'prezzo_netto', 'ordine', 'omaggio'];
 
-        const { totale, prezzo, ...filteredData } = card;
+        const values = filteredCardData.map(card => {
+          const { totale, prezzo, ...filteredData } = card;
+          return [
+            filteredData.soccorso,
+            filteredData.quantita,
+            filteredData.prezzo_netto,
+            filteredData.ordine,
+            filteredData.omaggio
+          ];
+        });
 
-        const is_sav = await manager
-          .createQueryBuilder()
-          .insert()
-          .into('ordini__pacchetti_cardss_quantita')
-          .values(
-            filteredData
-          )
-          .execute();
+        // Construir SQL crudo para la inserción por lotes con columnas explícitas
+        const placeholders = values.map(() => '(?, ?, ?, ?, ?)').join(', ');
+        const sqlParams = values.flat();
 
-        importo_tot += card.totale
+        await manager.query(
+          `INSERT INTO ordini__pacchetti_cardss_quantita (${columns.join(', ')}) VALUES ${placeholders}`,
+          sqlParams
+        );
       }
-      console.log('importo_tot___ ', importo_tot)
 
-      const [info_dealer] = await manager.query('SELECT * FROM dealers WHERE id = ?', [model.dealer])
+      // Get dealer info
+      const [infoDealer] = await manager.query('SELECT * FROM dealers WHERE id = ?', [model.dealer]);
 
+      // Format date
       const formattedDate = model.pagamento__data
-        ? format(endOfMonth(new Date()), 'yyyy-MM-dd')  // Último día del mes
+        ? format(endOfMonth(new Date()), 'yyyy-MM-dd')
         : format(new Date(), 'yyyy-MM-dd');
-
+      console.log('formattedDate: ', formattedDate)
+      // Create proforma
       const proforma = {
-        'tipo_cliente': 0,
-        'id_cliente': info_dealer.id,
-        'agente': info_dealer.agente,
-        'tipo_proforma': 3,
-        'importo': importo_tot.toFixed(2),
-        'data_inserimento': new Date(),
-        'data_proforma': formattedDate,
-        'data_invio': '1900-01-01',
-        'pagamento__rate': model.rate,
-        'pagamento__differita': model.prima_rata,
-        'pagamento__periodo': model.periodo,
-        'is_deleted': false
-      }
+        tipo_cliente: 0,
+        id_cliente: infoDealer.id,
+        agente: infoDealer.agente,
+        tipo_proforma: 3,
+        importo: importoTot.toFixed(2),
+        data_inserimento: new Date(),
+        data_proforma: formattedDate,
+        data_invio: '1900-01-01',
+        pagamento__rate: model.rate,
+        pagamento__differita: model.prima_rata,
+        pagamento__periodo: model.periodo,
+        is_deleted: false
+      };
 
-      const pf_found = await manager
+      const proformaResult = await manager
         .createQueryBuilder()
         .insert()
         .into('proforma')
-        .values(
-          proforma
-        )
+        .values(proforma)
         .execute();
 
-      model.id_proforma = pf_found.raw?.insertId
+      const proformaId = proformaResult.raw?.insertId;
 
+      // Update the order with proforma ID
       await manager
         .createQueryBuilder()
         .update('ordini__pacchetti_cardss')
-        .set({ id_proforma: pf_found.raw?.insertId })
-        .where('id = :id', { id: is_saved.raw?.insertId })
+        .set({ id_proforma: proformaId })
+        .where('id = :id', { id: orderId })
         .execute();
 
-
-    })
-
-    return { message: 'Proceso realizado correctamente' }
+      return { orderId, proformaId, importoTot };
+    });
   }
 
   async getOrdini(
@@ -230,64 +239,58 @@ export class OrdiniPachettiCardsService {
   }
 
 
-  async update(id: number, updateOrdiniPachettiCardDto: any, userId: string) {
+  async update(id: number, updateOrdiniPachettiCardDto: any) {
     return await this.dataSource.transaction(async (manager) => {
-      const user = await this.validateUser(userId);
+      const { cardData, ...orderData } = updateOrdiniPachettiCardDto;
 
-      if (user.role !== 'admin') return
-      console.log('id___ ', id)
-      const model = updateOrdiniPachettiCardDto
-      console.log('model::___', model)
+      // 1. Update main order record
+      await manager.update(
+        'ordini__pacchetti_cardss',
+        { id },
+        orderData
+      );
 
-      let importo_tot = 0;
-      const { cardData, ...filteredModel } = model;
-
-      const is_update = await this.entityManager
-        .createQueryBuilder()
-        .update('ordini__pacchetti_cardss')
-        .set(filteredModel)
-        .where('id = :id', { id })
-        .execute();
-
-      const filteredCardData = Object.entries(model.cardData)
+      // 2. Process and update card items
+      const cardUpdates = Object.entries(cardData)
         .filter(([_, item]) => (item as CardItem).quantita > 0)
-        .map(([key, item]) => ({
-          soccorso: key,
-          prezzo: (item as CardItem).prezzo,
-          quantita: (item as CardItem).quantita,
-          prezzo_netto: (item as CardItem).netto,
-          totale: (item as CardItem).totale,
-          ordine: (item as CardItem).ordine,
-          id: (item as CardItem).id,
-          omaggio: (item as CardItem).omaggio || 0,
-        }));
+        .map(([soccorso, item]) => {
+          const { totale, prezzo, netto, ...cardItem } = item as CardItem;
+          return {
+            ...cardItem,
+            soccorso,
+            prezzo_netto: netto,
+            ordine: id, // Assuming this should be the order ID
+            omaggio: cardItem.omaggio || 0,
+          };
+        });
 
-      for (let card of filteredCardData) {
-        const { totale, prezzo, ...filteredCardData } = card
-        const { id } = card
-        await this.entityManager
-          .createQueryBuilder()
-          .update('ordini__pacchetti_cardss_quantita')
-          .set(filteredCardData)
-          .where('id = :id', { id })
-          .execute();
-
+      // Batch update card items
+      for (const card of cardUpdates) {
+        await manager.update(
+          'ordini__pacchetti_cardss_quantita',
+          { id: card.id },
+          card
+        );
       }
 
-      const [has] = await manager.query('SELECT * FROM proforma WHERE id = ? AND is_deleted = 0', [model.id_proforma])
-      const has_fatture = has ? true : false
-      if (has_fatture) {
-        await this.proformaService.recalcTotaleProforma(model.id_proforma)
-        await this.proformaService.genPdfProforma(model.id_proforma)
+      // 3. Handle proforma if exists
+      const [proforma] = await manager.query(
+        'SELECT 1 FROM proforma WHERE id = ? AND is_deleted = 0 LIMIT 1',
+        [orderData.id_proforma]
+      );
+
+      if (proforma) {
+        await this.proformaService.recalcTotaleProforma(orderData.id_proforma);
+        await this.proformaService.genPdfProforma(orderData.id_proforma);
       }
-    })
+    });
   }
 
   async remove(id: number) {
 
     const result = await this.dataSource
       .createQueryBuilder()
-      .update('ordini__pacchetti')
+      .update('ordini__pacchetti_cardss')
       .set({ is_deleted: 1 })
       .where("id = :id", { id })
       .execute();

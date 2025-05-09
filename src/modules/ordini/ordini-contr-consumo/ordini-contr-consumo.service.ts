@@ -8,6 +8,9 @@ import { UsersService } from 'src/modules/users/users.service';
 import { ProformaService } from 'src/modules/Fatture/proforma/proforma.service';
 import { ContrattoSearch } from './interface/ordini-contr-consumo.interface';
 import { format } from 'date-fns';
+import { WrapperType } from 'src/generate-metadata';
+import { OrdiniContrConsumoCard } from '../ordini-contr-consumo-cards/entities/ordini-contr-consumo-card.entity';
+import { OrdiniContrConsumoCardsService } from '../ordini-contr-consumo-cards/ordini-contr-consumo-cards.service';
 
 export const ContrattoSearchKeys = [
   'id_dealer',
@@ -33,22 +36,19 @@ export const ContrattoSearchKeys = [
 export class OrdiniContrConsumoService {
 
   constructor(
+    @Inject(forwardRef(() => ProformaService))
+    private proformaService: WrapperType<ProformaService>,
+
+    @Inject(forwardRef(() => OrdiniContrConsumoCardsService))
+    private ordiniContrConsumoCardsService: WrapperType<OrdiniContrConsumoCardsService>,
 
     @InjectEntityManager() private entityManager: EntityManager,
 
     @InjectDataSource() private dataSource: DataSource,
 
-    private usersService: UsersService,
-
-    @Inject(forwardRef(() => ProformaService))
-    private proformaService: ProformaService
-
   ) { }
 
-  async create(createOrdiniContrConsumoDto: any, userId: string) {
-    const user = await this.validateUser(userId);
-
-    if (user.role !== 'admin') return
+  async create(createOrdiniContrConsumoDto: any) {
 
     const model = createOrdiniContrConsumoDto
 
@@ -203,11 +203,8 @@ export class OrdiniContrConsumoService {
 
   }
 
-  async update(id: number, updateOrdiniContrConsumoDto: any, userId: string) {
+  async update(id: number, updateOrdiniContrConsumoDto: any) {
     return await this.dataSource.transaction(async (manager) => {
-      const user = await this.validateUser(userId);
-
-      if (user.role !== 'admin') return
 
       const ordini = await manager.query('SELECT * FROM ordini__contratti_a_consumo WHERE id = ?', [id])
       const model = updateOrdiniContrConsumoDto
@@ -300,18 +297,12 @@ export class OrdiniContrConsumoService {
       const prezzo = ordiniContrConsumo[soccorsoKey] || prezziDefaultSoccorsi[soccorsoKm];
       return prezzo;
     } else {
-      return prezziDefaultSoccorsi[soccorsoKm];
+      console.log('prezziDefaultSoccorsi[soccorsoKm]___ ', prezziDefaultSoccorsi)
+      return prezziDefaultSoccorsi;
     }
   }
 
-  private validateUser(email: string): Promise<User | any> {
 
-    const user = this.usersService.findByUsername(email)
-
-    if (!user) throw new NotFoundException('Usuario no encontrado');
-
-    return user;
-  }
 
   applyFilters(query: SelectQueryBuilder<any>, search: ContrattoSearch): void {
     // Lista de campos válidos para filtrar (excluyendo page y limit)

@@ -6,10 +6,14 @@ import { MailProcessor } from './mail.processor';
 import { join } from 'path';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
+import { FtpServiceModule } from 'src/ftp-service/ftp-service.module';
+import { UsersModule } from 'src/modules/users/users.module';
+import { User } from 'src/modules/users/interface/user-interface';
 require('dotenv').config();
 
 @Module({
     imports: [
+        FtpServiceModule,
         BullModule.forRoot({
             redis: {
                 host: '10.114.0.4', // 10.114.0.4 - localhost

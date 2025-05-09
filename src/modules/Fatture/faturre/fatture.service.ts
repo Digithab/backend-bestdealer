@@ -58,13 +58,7 @@ export class FattureService {
 
     return faturre
   }
-  async create(data: any, userId: string) {
-    // Validación temprana del usuario
-    const user = await this.validateUser(userId);
-    console.log('user.permissions: ', user.permissions)
-    if (!user.permissions.includes('fatture:create')) {
-        throw new ForbiddenException('No tienes permisos para crear facturas');
-    }
+  async create(data: any) {
 
     let fatturaId: any;
 
@@ -72,12 +66,14 @@ export class FattureService {
 
     data.data_fattura = currentDate;
 
+    console.log('data: ', data)
+
     await this.dataSource.transaction(async (manager) => {
       const id_proforma = data.id_proforma;
 
 
       // Obtener la proforma en paralelo con la consulta de progressivo
-      const [proforma, progQuery, progInvioQuery] = await Promise.all([
+      const [[proforma], [progQuery], [progInvioQuery]] = await Promise.all([
         manager.query(`SELECT * FROM proforma WHERE id = ?`, [id_proforma]),
         manager.query(`
         SELECT MAX(CAST(progressivo_ft_annuale AS UNSIGNED)) as prog
@@ -88,26 +84,30 @@ export class FattureService {
         manager.query(`SELECT MAX(CAST(ProgressivoInvio AS UNSIGNED)) as prog FROM fatture`)
       ]);
 
+      console.log('proforma: ', proforma)
+      console.log('progQuery: ', progQuery)
+      console.log('progInvioQuery: ', progInvioQuery)
+
       // Preparar valores base de la factura
       const baseValues = {
         rif_proforma: id_proforma,
         is_deleted: false,
         data_inserimento: format(new Date(), 'yyyy-MM-dd'),
         data_primo_invio: '1900-01-01',
-        progressivo_ft_annuale: data.contabilizza ? Number(progQuery[0].prog) + 1 : progQuery[0].prog,
-        ProgressivoInvio: data.contabilizza ? Number(progInvioQuery[0].prog) + 1 : 0,
+        progressivo_ft_annuale: data.contabilizza ? Number(progQuery.prog) + 1 : progQuery.prog,
+        ProgressivoInvio: data.contabilizza ? Number(progInvioQuery.prog) + 1 : 0,
         tipo_fattura: ''
       };
 
       // Calcular valores financieros
-      const tot_proforma = parseFloat(proforma[0].importo) +
-        Math.round(proforma[0].importo * (data.iva / 100) * 100) / 100;
+      const tot_proforma = parseFloat(proforma.importo) +
+        Math.round(proforma.importo * (data.iva / 100) * 100) / 100;
 
       const fatturato = await this.getFatturato(id_proforma);
       const da_saldare = Math.round(tot_proforma - fatturato);
 
       // Validar el monto
-      if (Math.round(parseFloat(proforma[0].importo_ft) * 100) / 100 > da_saldare) {
+      if (Math.round(parseFloat(proforma.importo_ft) * 100) / 100 > da_saldare) {
         throw new BadRequestException('El monto de la factura excede el saldo pendiente');
       }
 
@@ -115,7 +115,7 @@ export class FattureService {
       const fatture = {
         ...baseValues,
         ...data,
-        tipo_fattura: proforma[0].importo_ft === da_saldare ? 'TD01' : 'TD02'
+        tipo_fattura: proforma.importo_ft === da_saldare ? 'TD01' : 'TD02'
       };
 
       // Eliminar id_proforma ya que no es parte de la tabla fatture
@@ -130,8 +130,11 @@ export class FattureService {
         .execute();
 
       fatturaId = f_found.raw?.insertId;
+      console.log('fatturaId: ', fatturaId)
 
     });
+
+    console.log('fatturaId: ', fatturaId)
 
     if (fatturaId) {
       // Generar documentos y registrar log en paralelo
@@ -143,7 +146,7 @@ export class FattureService {
           .insert()
           .into('log')
           .values({
-            user: user.id,
+            user: 'default',
             operazione: 1,
             record_table: 'fatture',
             record_id: fatturaId
@@ -205,11 +208,8 @@ export class FattureService {
     return `This action updates a #${id} faturre`;
   }
 
-  async remove(id: number, userId) {
+  async remove(id: number) {
     return await this.dataSource.transaction(async (manager) => {
-      const user = await this.validateUser(userId);
-
-      if (user.role !== 'admin') return
 
       await manager
         .createQueryBuilder()
@@ -285,56 +285,92 @@ export class FattureService {
     });
   }
 
-  async actionInviaFattura(id: any, userId) {
-    const user = await this.validateUser(userId);
+  async actionInviaFattura(id: any) {
 
-    if (user.role !== 'admin') {
-      throw new ForbiddenException('No tienes permisos para crear garantías');
-    }
+    try {
+      // Obtener datos de factura y proforma en paralelo
+      const [fatturaResult, proformaResult] = await Promise.all([
+        this.entityManager.query('SELECT * FROM fatture WHERE id = ?', [id]),
+        this.entityManager.query('SELECT f.rif_proforma, p.* FROM fatture f JOIN proforma p ON f.rif_proforma = p.id WHERE f.id = ?', [id])
+      ]);
 
-    const [fatture] = await this.entityManager.query('SELECT * FROM fatture WHERE id = ?', [id]);
-    const [proforma] = await this.entityManager.query('SELECT * FROM proforma WHERE id = ?', [fatture.rif_proforma]);
+      const fattura = fatturaResult[0];
+      const proforma = proformaResult[0];
 
+      if (!fattura || !proforma) {
+        throw new NotFoundException('Factura o proforma no encontrada');
+      }
 
-    let to = '';
-    let cc = [];
-    let ccN = 'info@bestdealer.it';
-    let subject = '';
+      let to = 'aetiru@gmail.com'; // Dirección predeterminada o podría ser configurable
+      let cc = [];
+      let bcc = 'info@bestdealer.it';
+      let subject = '';
 
-    switch (proforma.tipo_cliente) {
-      case 0:
-        const [dealer] = await this.entityManager.query('SELECT denominazione FROM dealers WHERE id = ?', [proforma.id_cliente])
-        console.log('dealer::: ', dealer)
-        subject = `Invio Fattura: Dealer ${dealer.denominazione}`
-        const contatti = await this.entityManager.query('SELECT * FROM dealers__contatti WHERE dealer = ?', [proforma.id_cliente])
-        const [agenti] = await this.entityManager.query('SELECT email FROM agenti WHERE id = ?', [proforma.id_cliente])
+      // Preparar datos de correo según el tipo de cliente
+      if (proforma.tipo_cliente === 0) {
+        // Obtener datos del dealer y contactos en paralelo
+        const [dealerResult, contattiResult, agentiResult] = await Promise.all([
+          this.entityManager.query('SELECT denominazione FROM dealers WHERE id = ?', [proforma.id_cliente]),
+          this.entityManager.query('SELECT email FROM dealers__contatti WHERE dealer = ? LIMIT 3', [proforma.id_cliente]),
+          this.entityManager.query('SELECT email FROM agenti WHERE id = ?', [proforma.id_cliente])
+        ]);
 
-        if (agenti) cc.push(agenti.email);
-        contatti.slice(1, 3).forEach(contatto => {
-          const email = contatto?.email;
-          if (email) cc.push(email);
-        });
-        break;
-      default:
+        const dealer = dealerResult[0];
+        subject = `Invio Fattura: Dealer ${dealer?.denominazione || 'Unknown'}`;
+
+        // Agregar agente a CC si existe
+        if (agentiResult[0]?.email) {
+          cc.push(agentiResult[0].email);
+        }
+
+        // Agregar contactos relevantes a CC
+        cc = cc.concat(contattiResult
+          .slice(0, 2) // Limitamos a los primeros 2 contactos
+          .filter(contatto => contatto?.email)
+          .map(contatto => contatto.email));
+      } else {
         throw new NotFoundException('La risorsa richiesta non è stata trovata.');
-        break;
-    }
+      }
 
-    console.log('Enviando correo....')
-    await this.mailService.sendFattureEmail('aetiru@gmail.com', 'aetiru@gmail.com', 'aetiru@gmail.com', fatture.anno_ft, format(new Date(fatture.data_fattura), 'dd/MM/yyyy'), subject)
+      // Enviar correo electrónico
+      await this.mailService.sendFattureEmail(
+        to,
+        cc.join(','), // Convertir array a string separado por comas
+        bcc,
+        fattura.anno_ft,
+        format(new Date(fattura.data_fattura), 'dd/MM/yyyy'),
+        subject
+      );
 
-    if (format(new Date(fatture.data_primo_invio), 'yyyy-MM-dd') === '1900-01-01') {
-      fatture.data_primo_invio = format(new Date(), 'yyyy-MM-dd');
-      if (fatture.ProgressivoInvio === '' && fatture.fileXML === '') {
-        const prog = await this.entityManager.query('SELECT MAX(CAST(ProgressivoInvio AS UNSIGNED)) FROM fatture');
-        fatture.ProgressivoInvio = Number(prog) + 1;
+      // Actualizar información de la factura si es el primer envío
+      const currentDate = new Date();
+      const formattedCurrentDate = format(currentDate, 'yyyy-MM-dd');
+
+      if (format(new Date(fattura.data_primo_invio || '1900-01-01'), 'yyyy-MM-dd') === '1900-01-01') {
+        const updateData: any = {
+          data_primo_invio: formattedCurrentDate
+        };
+
+        // Si no tiene progresivo de envío y archivo XML, asignar nuevo progresivo
+        if (!fattura.ProgressivoInvio && !fattura.fileXML) {
+          const progResult = await this.entityManager.query('SELECT MAX(CAST(ProgressivoInvio AS UNSIGNED)) as maxProg FROM fatture');
+          const maxProg = progResult[0]?.maxProg || 0;
+          updateData.ProgressivoInvio = Number(maxProg) + 1;
+        }
+
+        // Actualizar la factura con los nuevos datos
         await this.entityManager
           .createQueryBuilder()
           .update('fatture')
-          .set(fatture)
-          .where('id = :id', { id: id })
+          .set(updateData)
+          .where('id = :id', { id })
           .execute();
       }
+
+      return { success: true, message: 'Factura enviada correctamente' };
+    } catch (error) {
+      console.error('Error al enviar factura:', error);
+      throw new Error(`Error al enviar factura: ${error.message}`);
     }
   }
 
@@ -349,17 +385,17 @@ export class FattureService {
 
   private async validateUser(email: string): Promise<User | any> {
     const user = await this.usersService.findByUsername(email);
-    
+
     if (!user) {
-        throw new NotFoundException('Usuario no encontrado');
+      throw new NotFoundException('Usuario no encontrado');
     }
-    
-    const hasModuleAccess = user.permissions.some(permission => 
-        permission.startsWith('fatture:')
+
+    const hasModuleAccess = user.permissions.some(permission =>
+      permission.startsWith('fatture:')
     );
-    
+
     if (!hasModuleAccess) {
-        throw new ForbiddenException('No tienes acceso al módulo de facturas');
+      throw new ForbiddenException('No tienes acceso al módulo de facturas');
     }
 
     return user;
@@ -417,6 +453,7 @@ export class FattureService {
         break;
       case 1: // Cliente
         const [client] = await this.entityManager.query('SELECT * FROM clienti WHERE id = ?', [proforma.id_cliente]);
+        console.log('client', client);
         if (!client || !client.abilitazione_proforma) {
           throw new NotFoundException('La risorsa richiesta non è stata trovata CLIENTI.');
         }
@@ -525,12 +562,7 @@ export class FattureService {
     }
   }
 
-  async actionNotaCredito(data: any, userId) {
-    const user = await this.validateUser(userId);
-
-    if (user.role !== 'admin') {
-      throw new ForbiddenException('No tienes permisos para crear garantías');
-    }
+  async actionNotaCredito(data: any) {
 
     let nota_credito = null
     let fattura = null
@@ -583,9 +615,9 @@ export class FattureService {
     if (is_saved) {
       await this.genDocsFattura(is_saved.raw?.insertId, true)
       await this.genDocsFattura(is_saved.raw?.insertId, false)
-      console.log('`${userId} - ${user.role}`_', `${userId} - ${user.role}`)
+
       const log = {
-        user: `${userId} - ${user.role}`,
+        user: `default`,
         operazione: 2,
         record_table: 'fatture',
         record_id: is_saved.raw?.insertId

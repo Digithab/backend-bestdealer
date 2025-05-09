@@ -9,5 +9,5 @@ export class User {
     role: string;
     permissions?: string[]; // Añadir permisos
     sigla?: string;
-
+    active?: boolean
 }

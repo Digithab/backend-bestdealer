@@ -4,16 +4,19 @@ import { CreateOrdiniContrConsumoDto } from './dto/create-ordini-contr-consumo.d
 import { UpdateOrdiniContrConsumoDto } from './dto/update-ordini-contr-consumo.dto';
 import { ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/modules/auth/jwt-auth.guard';
+import { RolesGuard } from 'src/modules/auth/roles.guard';
+import { Roles } from 'src/modules/auth/roles.decorator';
 
 @Controller('ordini-contr-consumo')
-@UseGuards(JwtAuthGuard) // Asegúrate de proteger estas rutas
+@UseGuards(JwtAuthGuard, RolesGuard) // Asegúrate de proteger estas rutas
 export class OrdiniContrConsumoController {
   constructor(private readonly ordiniContrConsumoService: OrdiniContrConsumoService) { }
 
   @Post()
+  @Roles('admin', 'Super Admin')
   create(@Body() createOrdiniContrConsumoDto: any, @Request() req) {
     const email = req.user.email
-    return this.ordiniContrConsumoService.create(createOrdiniContrConsumoDto, email);
+    return this.ordiniContrConsumoService.create(createOrdiniContrConsumoDto);
   }
 
   @Get()
@@ -51,9 +54,9 @@ export class OrdiniContrConsumoController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateOrdiniContrConsumoDto: UpdateOrdiniContrConsumoDto, @Request() req) {
-    const email = req.user.email
-    return this.ordiniContrConsumoService.update(+id, updateOrdiniContrConsumoDto, email);
+  @Roles('admin', 'Super Admin')
+  update(@Param('id') id: string, @Body() updateOrdiniContrConsumoDto: UpdateOrdiniContrConsumoDto) {
+    return this.ordiniContrConsumoService.update(+id, updateOrdiniContrConsumoDto);
   }
 
   @Delete(':id')

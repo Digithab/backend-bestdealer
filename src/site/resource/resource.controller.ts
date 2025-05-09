@@ -7,9 +7,11 @@ import { Response } from 'express';
 import { FtpServiceService } from 'src/ftp-service/ftp-service.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { get } from 'http';
+import { Roles } from 'src/modules/auth/roles.decorator';
+import { RolesGuard } from 'src/modules/auth/roles.guard';
 
 @Controller('resource')
-@UseGuards(JwtAuthGuard) // Asegúrate de proteger estas rutas
+@UseGuards(JwtAuthGuard, RolesGuard) // Asegúrate de proteger estas rutas
 export class ResourceController {
   constructor(
     private readonly resourceService: ResourceService,
@@ -82,11 +84,12 @@ export class ResourceController {
   }
 
   @Patch('site/type/:id')
-  updatePrezzo(@Param('id') id: string, @Body() Dto: any, @Request() req) {
-    const email = req.user.email
+  @Roles('Super Admin')
+  updatePrezzo(@Param('id') id: string, @Body() Dto: any) {
+
     const { prezzo_listino } = Dto
-    console.log('prezzo: ', prezzo_listino)
-    return this.resourceService.updatePrezzo(id, prezzo_listino, email);
+
+    return this.resourceService.updatePrezzo(id, prezzo_listino);
   }
 
   @Get('site/download/:id')

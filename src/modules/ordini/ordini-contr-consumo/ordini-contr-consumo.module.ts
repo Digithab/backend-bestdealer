@@ -12,8 +12,9 @@ import { GenPdfService } from 'src/modules/gen-pdf/gen-pdf.service';
 import { FtpServiceModule } from 'src/ftp-service/ftp-service.module';
 
 @Module({
-  imports: [UsersModule, forwardRef(() => ProformaModule), OrdiniContrConsumoCardsModule, MailModule, GenPdfModule, FtpServiceModule],
+  imports: [forwardRef(() => ProformaModule), UsersModule,MailModule, GenPdfModule, FtpServiceModule, forwardRef(() => OrdiniContrConsumoCardsModule)],
   controllers: [OrdiniContrConsumoController],
   providers: [OrdiniContrConsumoService, ProformaService, MailService, GenPdfService],
+  exports: [OrdiniContrConsumoService]
 })
 export class OrdiniContrConsumoModule { }

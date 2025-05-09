@@ -118,7 +118,7 @@ export class GaranzieService {
         (tipo_persona, denominazione, comune, cap,frazione, indirizzo, agente,civico, cellulare,email)
         VALUES (?, ?, ?, ?, ?,?,?,?,?,?)`,
         [
-          tipo_persona,
+          1,
           denominazione.toUpperCase(),
           comune,
           cap,

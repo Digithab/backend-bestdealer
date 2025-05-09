@@ -18,40 +18,39 @@ export class ProformaController {
   ) { }
 
   @Post()
-    @Roles('admin', 'Super Admin')
+  @Roles('admin', 'Super Admin')
   create(@Body() createProformaDto: CreateProformaDto) {
-    
+
     return this.proformaService.create(createProformaDto);
   }
 
   @Post('gen-pdf')
-    
+
   async genPdf(@Body() id: any) {
     return this.proformaService.genPdfProforma(id.id)
   }
 
-  @Post('invia-proforma')
+  @Post('invia-proforma/:id')
   @Roles('admin', 'Super Admin')
-  actionInviaProforma(@Body() id: any) {
-    
+  actionInviaProforma(@Param() id: any) {
 
+    console.log(id)
     return this.proformaService.actionInviaProforma(id)
   }
 
   @Post('sel-invia-proforma')
   @Roles('admin', 'Super Admin')
   actionNotificaSelezionati(@Body() sel: any) {
-    
+
 
     return this.proformaService.actionNotificaSelezionati(sel)
   }
 
-  @Get('/finalizza-proforma/:id')
+  @Post('/finalizza-proforma/:id')
   @Roles('admin', 'Super Admin')
-  actionFinalizzaProforma(@Param() id: any) {
-    
-
-    return this.proformaService.actionFinalizzaProforma(id)
+  actionFinalizzaProforma(@Param('id') id: string) {
+    console.log('actionFinalizzaProforma___ ', id)
+    return this.proformaService.actionFinalizzaProforma(+id)
   }
 
   @Get()
@@ -101,18 +100,18 @@ export class ProformaController {
   @Patch(':id')
   @Roles('admin', 'Super Admin')
   update(@Param('id') id: string, @Body() updateProformaDto: any) {
-    
+
     return this.proformaService.update(+id, updateProformaDto);
   }
 
   @Delete('update-liberi/:id')
   removeLiberti(@Param('id') id: string) {
-    
+
     return this.proformaService.removeLiberti(+id);
   }
   @Delete(':id')
   remove(@Param('id') id: string) {
-    
+
     return this.proformaService.remove(+id);
   }
 
@@ -128,7 +127,7 @@ export class ProformaController {
       const fileId = Number(id);
       const fileName = `${fileId}.pdf`;
       console.log('fileName___ ', fileName)
-      const filePath = `/httpdocs/storage/prova/${fileName}`;
+      const filePath = `/httpdocs/storage/prova/proforma/${fileName}`;
 
       console.log('filePathfilePath__ ', filePath)
 

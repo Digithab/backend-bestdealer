@@ -6,9 +6,11 @@ import { JwtAuthGuard } from 'src/modules/auth/jwt-auth.guard';
 import { FattureService } from './fatture.service';
 import { FtpServiceService } from 'src/ftp-service/ftp-service.service';
 import { Response } from 'express';
+import { RolesGuard } from 'src/modules/auth/roles.guard';
+import { Roles } from 'src/modules/auth/roles.decorator';
 
 @Controller('fatture')
-@UseGuards(JwtAuthGuard) // Asegúrate de proteger estas rutas
+@UseGuards(JwtAuthGuard, RolesGuard) // Asegúrate de proteger estas rutas
 export class FattureController {
   constructor(
     private readonly fattureService: FattureService,
@@ -16,17 +18,16 @@ export class FattureController {
   ) { }
 
   @Post()
-  create(@Body() createFaturreDto: any, @Request() req) {
-    console.log(req.user)
-    const email = req.user.email
-    return this.fattureService.create(createFaturreDto, email);
+  @Roles('admin', 'Super Admin')
+  create(@Body() createFaturreDto: any) {
+
+    return this.fattureService.create(createFaturreDto);
   }
 
   @Post('nota-credito')
-  notaCredio(@Body() data: any, @Request() req) {
-    console.log(req.email)
-    const email = req.user.email
-    return this.fattureService.actionNotaCredito(data, email);
+  @Roles('admin', 'Super Admin')
+  notaCredio(@Body() data: any) {
+    return this.fattureService.actionNotaCredito(data);
   }
 
   @Get()
@@ -82,17 +83,16 @@ export class FattureController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @Request() req) {
-    console.log(req.email)
-    const email = req.user.email
-    return this.fattureService.remove(+id, email);
+  @Roles('admin', 'Super Admin')
+  remove(@Param('id') id: string) {
+    return this.fattureService.remove(+id);
   }
 
   @Post('invia-fattura')
-  actionInviaFattura(@Body() id: any, @Request() req) {
-    const email = req.user.email
+  @Roles('admin', 'Super Admin')
+  actionInviaFattura(@Body() id: any) {
 
-    return this.fattureService.actionInviaFattura(id.id, email)
+    return this.fattureService.actionInviaFattura(id.id)
   }
 
   @Get('download/:id')

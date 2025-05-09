@@ -284,29 +284,27 @@ ORDER BY
 
   }
 
-  async actionNotificaSelezionati(sel: any, userId: string) {
-
-    const user = await this.validateUser(userId);
-
-    if (user.role !== 'admin') {
-      throw new ForbiddenException('No tienes permisos para crear garantías');
-    }
+  async actionNotificaSelezionati(sel: any) {
 
     for (const id_dealers of sel) {
       const [dealer] = await this.entityManager.query('SELECT * FROM dealers WHERE id = ?', [id_dealers])
       if (dealer) {
         const cc: string[] = [];
 
-        const [agenti] = await this.entityManager.query('SELECT email FROM agenti WHERE id = ?', [dealer.agente])
-        const contatti = await this.entityManager.query('SELECT * FROM dealers__contatti WHERE dealer = ?', [id_dealers])
+        const [[agenti], contatti] = await Promise.all([
+          this.entityManager.query('SELECT email FROM agenti WHERE id = ?', [dealer.agente]),
+          this.entityManager.query('SELECT * FROM dealers__contatti WHERE dealer = ?', [id_dealers])
+        ]);
 
         if (agenti) cc.push(agenti.email);
 
         const prod_acquistati = await this.getAllProdottiAcquistati()
 
-        const all_disponibilita = await this.entityManager.query('select * from v_dealer_disponibilita WHERE dealer = ?', [id_dealers])
-        const tipi_garanzie = await this.entityManager.query('select * from tipi_garanzie')
-        console.log('all_disponibilita___ ', all_disponibilita)
+        const [all_disponibilita, tipi_garanzie] = await Promise.all([
+          this.entityManager.query('select * from v_dealer_disponibilita WHERE dealer = ?', [id_dealers]),
+          this.entityManager.query('select * from tipi_garanzie')
+        ]);
+        
         const prodotti = all_disponibilita.map(d => {
           const prod = prod_acquistati.find(p => p.dealer === d.dealer && p.prodotto === d.prodotto)
           return {
@@ -325,7 +323,7 @@ ORDER BY
         // Enviar correo -> contatti[0].email > colocar email de prueba
         // Correo del agente CC -> agenti[0].email    
         console.log('Enviando correo....')
-        await this.mailService.sendGarantiasEmail('aetiru@gmail.com', cc, 'aetiru@gmail.com', prodotti, dealer.denominazione);
+        await this.mailService.sendGarantiasEmail('aetiru@gmail.com', ['aetiru@gmail.com'], 'aetiru@gmail.com', prodotti, dealer.denominazione);
       }
     }
 

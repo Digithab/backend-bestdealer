@@ -205,45 +205,77 @@ export class CardSoccorsoService {
 
   async create(createCardSoccorsoDto: CreateCardSoccorsoDto | any) {
     const { CardSoccorso: cardSoccorsoData, Veicoli: vehicoloData, Clienti: clientiData } = createCardSoccorsoDto.data;
-    console.log('createCardSoccorsoDto.data: ', createCardSoccorsoDto.data)
-    // Variables para tracking
-    let prezzo_card = 0;
-    let prezzo_rest = 0;
-    let card_da_pagare = false;
-    let rest_da_pagare = false;
-    let proformaResult: any;
-    let cardSoccorsoId: any;
 
+    // Preparar datos básicos fuera de la transacción
+    const today = new Date();
+    const expiry = add(today, { years: 1 });
+
+    // Obtener dealer una vez fuera de la transacción
+    const dealer = await this.findDealer(cardSoccorsoData.dealer);
+
+    // Iniciar consultas en paralelo para verificar disponibilidad
+    const disponibilitaPromise = this.disponibilitaPacchettiCardService.findTotalAcquistate(
+      cardSoccorsoData.dealer,
+      cardSoccorsoData.tipo_card
+    );
+
+    // Iniciar verificación de restitución en paralelo si aplica
+    let restitPromise = null;
+    if (cardSoccorsoData.tipo_card !== 'C' && cardSoccorsoData.restituzione > 0) {
+      const tipi_restituzione = [0, 'RR', 'RN'];
+      restitPromise = this.disponibilitaPacchettiCardService.findTotalAcquistate(
+        cardSoccorsoData.dealer,
+        tipi_restituzione[cardSoccorsoData.restituzione]
+      );
+    }
+
+    // Esperar resultados de las consultas paralelas
+    const [disponibilita, restitValid] = await Promise.all([
+      disponibilitaPromise,
+      restitPromise || Promise.resolve(false)
+    ]);
+
+    // Calcular precios en paralelo cuando sea necesario
+    const needsCardPayment = disponibilita <= 0;
+    const needsRestPayment = cardSoccorsoData.tipo_card !== 'C' &&
+      cardSoccorsoData.restituzione > 0 &&
+      restitValid;
+
+    const pricePromises = [];
+
+    if (needsCardPayment) {
+      pricePromises.push(this.ordiniContrConsumoCardsService.getPrezzoSoccorso(
+        cardSoccorsoData.dealer,
+        cardSoccorsoData.tipo_card,
+        today
+      ));
+    } else {
+      pricePromises.push(Promise.resolve(0));
+    }
+
+    if (needsRestPayment) {
+      const tipi_restituzione_contratti = [0, "rest_regionale", "rest_nazionale"];
+      pricePromises.push(this.ordiniContrConsumoCardsService.getPrezzoSoccorso(
+        cardSoccorsoData.dealer,
+        cardSoccorsoData.tipo_card,
+        tipi_restituzione_contratti[cardSoccorsoData.restituzione]
+      ));
+    } else {
+      pricePromises.push(Promise.resolve(0));
+    }
+
+    const [prezzo_card, prezzo_rest] = await Promise.all(pricePromises);
+
+    // Ejecutar la transacción principal con datos ya preparados
     return await this.dataSource.transaction(async (manager) => {
-
-      // 2. Preparar datos para Card Soccorso
-      const today = new Date();
-      const cardSoccorso = {
-        ...cardSoccorsoData,
-        data_attivazione: today,
-        data_scadenza: add(today, { years: 1 }),
-        data_inserimento: today,
-        stato: 1,
-        id_proforma: 0,
-        id_proforma_restituzione: 0,
-        is_deleted: false
-      };
-      
-
-      // Si es tipo C, no hay restitución
-      if (cardSoccorso.tipo_card === 'C') {
-        cardSoccorso.restituzione = 0;
-      }
-
-      // 3. Preparar datos del cliente
+      // 1. Insertar cliente
       const clienti = {
         ...clientiData,
         abilitazione_proforma: false,
-        agente: cardSoccorso.agente,
+        agente: cardSoccorsoData.agente,
         denominazione: clientiData.denominazione.toUpperCase()
       };
 
-      // 4. Guardar cliente
       const clientiResult = await manager
         .createQueryBuilder()
         .insert()
@@ -253,7 +285,7 @@ export class CardSoccorsoService {
 
       const idClient = clientiResult.raw.insertId;
 
-      // 5. Preparar y guardar vehículo
+      // 2. Insertar vehículo
       const vehicolo = {
         ...vehicoloData,
         cliente: idClient,
@@ -264,7 +296,6 @@ export class CardSoccorsoService {
       // Procesar marcas y modelos
       const { marcaId, modeloId } = await this.processVehicleBrands(vehicolo, manager);
 
-      // Guardar vehículo
       const { modelo, ...vehicoloToSave } = vehicolo;
       const vehicoloResult = await manager
         .createQueryBuilder()
@@ -273,69 +304,43 @@ export class CardSoccorsoService {
         .values(vehicoloToSave)
         .execute();
 
-      // 6. Completar datos de Card Soccorso
-      cardSoccorso.veicolo = vehicoloResult.raw.insertId;
-      cardSoccorso.proprietario = idClient;
+      const vehicoloId = vehicoloResult.raw.insertId;
 
-      // 7. Procesar disponibilidad y precios
-      const dealer = await this.findDealer(cardSoccorso.dealer);
+      // 3. Crear proforma si es necesario
+      let proformaId = 0;
+      if (needsCardPayment || needsRestPayment) {
+        const cardSoccorsoForProforma = {
+          ...cardSoccorsoData,
+          veicolo: vehicoloId,
+          proprietario: idClient
+        };
 
-      // Verificar disponibilidad de card
-      const disponibilita = await this.disponibilitaPacchettiCardService.findTotalAcquistate(
-        cardSoccorso.dealer,
-        cardSoccorso.tipo_card
-      );
-
-      // 8. Procesar restitución si aplica
-      if (cardSoccorso.restituzione > 0) {
-        const tipi_restituzione = [0, 'RR', 'RN'];
-        const tipi_restituzione_contratti = [0, "rest_regionale", "rest_nazionale"];
-
-        const valid = await this.disponibilitaPacchettiCardService.findTotalAcquistate(
-          cardSoccorso.dealer,
-          tipi_restituzione[cardSoccorso.restituzione]
-        );
-
-        if (valid) {
-          rest_da_pagare = true;
-          prezzo_rest = await this.ordiniContrConsumoCardsService.getPrezzoSoccorso(
-            cardSoccorso.dealer,
-            cardSoccorso.tipo_card,
-            tipi_restituzione_contratti[cardSoccorso.restituzione]
-          );
-        }
-      }
-
-      // 9. Verificar si la card es de paquete o a consumo
-      if (disponibilita <= 0) {
-        card_da_pagare = true;
-        prezzo_card = await this.ordiniContrConsumoCardsService.getPrezzoSoccorso(
-          cardSoccorso.dealer,
-          cardSoccorso.tipo_card,
-          cardSoccorso.data_attivazione
-        );
-      }
-
-      // 10. Crear o actualizar proforma si es necesario
-      if (card_da_pagare || rest_da_pagare) {
-        proformaResult = await this.handleProforma(
+        const proformaResult = await this.handleProforma(
           manager,
           dealer,
-          cardSoccorso,
+          cardSoccorsoForProforma,
           prezzo_card,
           prezzo_rest
         );
 
-        if (card_da_pagare) {
-          cardSoccorso.id_proforma = proformaResult.insertId || proformaResult[0]?.id;
-        }
-
-        if (rest_da_pagare) {
-          cardSoccorso.id_proforma_restituzione = proformaResult.insertId || proformaResult[0]?.id;
-        }
+        proformaId = proformaResult.insertId || proformaResult[0]?.id || 0;
       }
 
-      // 11. Guardar Card Soccorso
+      // 4. Insertar Card Soccorso con todos los datos ya preparados
+      const cardSoccorso = {
+        ...cardSoccorsoData,
+        data_attivazione: today,
+        data_scadenza: expiry,
+        data_inserimento: today,
+        stato: 1,
+        id_proforma: needsCardPayment ? proformaId : 0,
+        id_proforma_restituzione: needsRestPayment ? proformaId : 0,
+        is_deleted: false,
+        veicolo: vehicoloId,
+        proprietario: idClient,
+        restituzione: cardSoccorsoData.tipo_card === 'C' ? 0 : cardSoccorsoData.restituzione
+      };
+
       const cardSoccorsoResult = await manager
         .createQueryBuilder()
         .insert()
@@ -343,17 +348,24 @@ export class CardSoccorsoService {
         .values(cardSoccorso)
         .execute();
 
-      cardSoccorsoId = cardSoccorsoResult.raw.insertId;
+      const cardSoccorsoId = cardSoccorsoResult.raw.insertId;
 
-      return { cardSoccorsoId, proformaId: proformaResult?.insertId };
+      return { cardSoccorsoId, proformaId };
     }).then(async (result) => {
-      // Procesamiento posterior a la transacción
-      if ((card_da_pagare || rest_da_pagare) && proformaResult?.insertId) {
-        await this.proformaService.genPdfProforma(proformaResult.insertId);
+      // Generar PDFs en paralelo si es necesario
+      const { cardSoccorsoId, proformaId } = result;
+
+      const pdfPromises = [];
+      if (proformaId) {
+        pdfPromises.push(this.proformaService.genPdfProforma(proformaId));
       }
 
       if (cardSoccorsoId) {
-        await this.genPdfCardSoccorso(cardSoccorsoId);
+        pdfPromises.push(this.genPdfCardSoccorso(cardSoccorsoId));
+      }
+
+      if (pdfPromises.length > 0) {
+        await Promise.all(pdfPromises);
       }
 
       return result;
@@ -464,7 +476,6 @@ export class CardSoccorsoService {
       }
     };
 
-    console.table(formattedResult.card);
     return formattedResult;
   } catch(error) {
     throw new HttpException(
@@ -473,7 +484,7 @@ export class CardSoccorsoService {
     );
   }
 
-  async update(idn: number, updateCardSoccorsoDto: any, userId: any) {
+  async update(idn: number, updateCardSoccorsoDto: any) {
 
     const oldCardSoccorso = await this.findOne(idn);
 
@@ -490,39 +501,25 @@ export class CardSoccorsoService {
 
     const result = await this.dataSource.transaction(async (manager) => {
 
-      const user = await this.validateUser(userId);
-
-      if (user.role !== 'dealer' && user.role !== 'admin') {
-        throw new ForbiddenException('No tienes permisos para crear garantías');
-      }
-
-      // const modelVehicolo = await manager.query(`SELECT * FROM veicoli WHERE id = ?`, [oldCardSoccorso.veicolo]);
-
-      // const modelClienti = await manager.query(`SELECT * FROM veicoli WHERE id = ?`, [oldCardSoccorso.proprietario]);      
-      console.log('vehicolo: ', vehicolo)
       manager.createQueryBuilder()
         .update('veicoli')
         .set(vehicolo)
         .where("id = :id", { id: oldCardSoccorso.card.veicolo })
         .execute();
-      console.log('Vihiculo actualizado')
 
       manager.createQueryBuilder()
         .update('clienti')
         .set(clienti)
         .where("id = :id", { id: oldCardSoccorso.card.proprietario })
         .execute();
-      console.log('Cliente  actualizado')
 
       if (cardSoccorso.tipo_card === 'C') cardSoccorso.restituzione = 0;
 
-      console.log('RESTITUZIONE: ', cardSoccorso.restituzione, cardSoccorso.restituzione > 0)
-      console.log('TIPO CARD DISPONIBILITA: ', typeof cardSoccorso.restituzione)
       if (cardSoccorso.restituzione > 0) {
         const tipi_restituzione = [0, 'RR', 'RN'];
 
         const disponibilita = await this.disponibilitaPacchettiCardService.findTotalAcquistate(cardSoccorso.dealer, tipi_restituzione[cardSoccorso.restituzione])
-        console.log('disponibilita: ', disponibilita)
+
         if (disponibilita) {
           rest_da_pagare = true
           prezzo_rest = await this.ordiniContrConsumoCardsService.getPrezzoSoccorso(cardSoccorso.dealer, tipi_restituzione[cardSoccorso.restituzione], cardSoccorso.data_attivazione)
@@ -530,11 +527,10 @@ export class CardSoccorsoService {
 
       }
 
-      console.log('TIPO CARD:', cardSoccorso.tipo_card !== oldCardSoccorso.card.tipo_card)
+
       if (cardSoccorso.tipo_card !== oldCardSoccorso.card.tipo_card) {
         const disponibilita = await this.disponibilitaPacchettiCardService.findTotalAcquistate(cardSoccorso.dealer, cardSoccorso.tipo_card)
-        console.log('disponibilita: ', disponibilita)
-        console.log('TIPO CARD DISPONIBILITA: ', typeof disponibilita)
+
         if (disponibilita > 0) {
           cardSoccorso.id_proforma = 0;
         } else {
@@ -543,13 +539,11 @@ export class CardSoccorsoService {
         }
       }
 
-      console.log('CARD DA PAGARE: ', card_da_pagare)
-      console.log('REST DA PAGARE: ', rest_da_pagare)
+
       if (card_da_pagare || rest_da_pagare) {
         const [dealer] = await manager.query(`SELECT * FROM dealers WHERE id = ?`, [cardSoccorso.dealer])
-        console.log('DEALER: ', dealer.data_proforma_singole_garanzie)
+
         pf_found = await manager.query(`SELECT * FROM proforma WHERE tipo_cliente = 0 AND id_cliente = ? AND tipo_proforma = 2 AND data_proforma = ?`, [cardSoccorso.dealer, format(endOfMonth(new Date()), 'yyyy-MM-dd')]);
-        console.log('pf_found: ', pf_found)
         if (!dealer.data_proforma_singole_garanzie) {
 
           if (!pf_found) {
@@ -594,7 +588,6 @@ export class CardSoccorsoService {
           //   .where("id = :id", { id: pf_found.id })
           //   .execute();
         }
-        console.log('proforma_id__ ', proforma_id)
         const id_proforma = pf_found === undefined || pf_found.length === 0 ? proforma_id.raw?.insertId : pf_found.id
         if (card_da_pagare) cardSoccorso.id_proforma = id_proforma;
         else cardSoccorso.id_proforma = 0;
@@ -606,7 +599,6 @@ export class CardSoccorsoService {
         cardSoccorso.id_proforma_restituzione = 0;
       }
 
-      console.log('cardSoccorso___ ', cardSoccorso)
       const { id, venditore, ...newCar } = cardSoccorso
       await manager
         .createQueryBuilder()
@@ -626,16 +618,12 @@ export class CardSoccorsoService {
       SELECT * FROM fatture WHERE rif_proforma = ? AND is_deleted = 0
     `, [cardSoccorso.id_proforma])
 
-    console.log('RECALCULO: ', recalc_tot_proforma || !fatture)
-    console.log('FACTURA: ', !fatture)
-    console.log('FACTURA: ', fatture)
     if (cardSoccorso.id_proforma > 0) {
       if (recalc_tot_proforma || !fatture) {
         await this.proformaService.recalcTotaleProforma(cardSoccorso.id_proforma)
         await this.proformaService.genPdfProforma(cardSoccorso.id_proforma)
 
 
-        console.log('PRRP: ', cardSoccorso.id_proforma_restituzione !== cardSoccorso.id_proforma && !fatture_rest)
         if (cardSoccorso.id_proforma_restituzione !== cardSoccorso.id_proforma && !fatture_rest) {
           await this.proformaService.recalcTotaleProforma(cardSoccorso.id_proforma_restituzione)
           await this.proformaService.genPdfProforma(cardSoccorso.id_proforma_restituzione)
@@ -645,8 +633,6 @@ export class CardSoccorsoService {
     }
 
     await this.genPdfCardSoccorso(idn)
-
-    console.log('PROCESO REALIZADO CON SUCCESSO')
 
     return result
   }

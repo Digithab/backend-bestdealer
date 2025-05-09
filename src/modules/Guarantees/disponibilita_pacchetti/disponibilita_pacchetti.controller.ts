@@ -6,9 +6,11 @@ import { DisponibilitaPacchettiService } from './disponibilita_pacchetti.service
 import { CreateDisponibilitaPacchettiDto } from './dto/create-disponibilita_pacchetti.dto';
 import { UpdateDisponibilitaPacchettiDto } from './dto/update-disponibilita_pacchetti.dto';
 import { JwtAuthGuard } from 'src/modules/auth/jwt-auth.guard';
+import { RolesGuard } from 'src/modules/auth/roles.guard';
+import { Roles } from 'src/modules/auth/roles.decorator';
 
 @Controller('guarantees/disponibilita-pacchetti')
-@UseGuards(JwtAuthGuard) // Asegúrate de proteger estas rutas
+@UseGuards(JwtAuthGuard, RolesGuard) // Asegúrate de proteger estas rutas
 export class DisponibilitaPacchettiController {
   constructor(private readonly disponibilitaPacchettiService: DisponibilitaPacchettiService) { }
 
@@ -34,10 +36,11 @@ export class DisponibilitaPacchettiController {
   }
 
   @Post('notification')
+  @Roles('admin', 'Super Admin', 'dealer', 'agente')
   create(@Body() sel: any, @Request() req,) {
     console.log('sel', sel)
     const email = req.user.email
-    return this.disponibilitaPacchettiService.actionNotificaSelezionati(sel, email);
+    return this.disponibilitaPacchettiService.actionNotificaSelezionati(sel);
   }
 
   // @Get()

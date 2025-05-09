@@ -144,9 +144,9 @@ export class CentriConvenzionatiService {
 
   async dataOfficina() {
     const officina = await this.getOfficina();
-    const result = [];
 
-    for (const off of officina) {
+    const result = await Promise.all(officina.map(async (off) => {
+      // Get centers data for the region
       const data = await this.entityManager.createQueryBuilder()
         .select([
           'ce.id as id',
@@ -161,33 +161,50 @@ export class CentriConvenzionatiService {
         ])
         .from('centri_convenzionati', 'ce')
         .leftJoin('comuni', 'co', 'ce.comune = co.id')
-        .where('ce.is_deleted in (0)')
+        .where('ce.is_deleted = 0') // Changed 'in (0)' to '= 0'
         .andWhere('co.regione LIKE :regione', { regione: `%${off.regione}%` })
         .orderBy('co.provincia', 'ASC')
         .getRawMany();
 
-      let tipos
+      // Process types for each center in parallel
       if (data.length > 0) {
-        // Obtener los tipos y transformarlos
-        const tipoQuery = await this.entityManager.createQueryBuilder()
-          .select('DISTINCT cct.descrizione as descrizione')
+        // Get all centers' IDs in a single array
+        const centerIds = data.map(center => center.id);
+
+        // Get all types for all centers in one query
+        const typesData = await this.entityManager.createQueryBuilder()
+          .select([
+            'ccat.centro as centerId',
+            'cct.descrizione as descrizione'
+          ])
           .from('centri_convenzionati__tipi', 'cct')
-          .leftJoin('centri_convenzionati__assoc__tipi', 'ccat', 'cct.id = ccat.tipo')
-          .where('ccat.centro = :id', { id: data[0].id })
+          .innerJoin('centri_convenzionati__assoc__tipi', 'ccat', 'cct.id = ccat.tipo')
+          .where('ccat.centro IN (:...centerIds)', { centerIds })
           .andWhere('ccat.attivo = 1')
           .getRawMany();
 
-        // Extraer solo los valores de descripción
-        tipos = tipoQuery.map(t => t.descrizione);
-      }
-      data.forEach(d => d.tipo = tipos);
-      result.push({
-        regione: off.regione,
-        count: data.length === 0 ? 0 : data.length,
-        data: data,
-      });
+        // Create a map of centerIds to their types
+        const centerTypesMap = {};
+        typesData.forEach(type => {
+          if (!centerTypesMap[type.centerId]) {
+            centerTypesMap[type.centerId] = [];
+          }
+          centerTypesMap[type.centerId].push(type.descrizione);
+        });
 
-    }
+        // Assign types to each center
+        data.forEach(center => {
+          center.tipo = centerTypesMap[center.id] || [];
+        });
+      }
+
+      return {
+        regione: off.regione,
+        count: data.length,
+        data: data,
+      };
+    }));
+
     return result;
   }
 

@@ -638,4 +638,61 @@ export class DealerService {
       console.log('error__', error)
     }
   }
+
+  async getDealerStatus(filters: {
+    denominazione?: string,
+    pec?: string,
+    stato?: number,
+    attivare?: boolean
+  }): Promise<any> {
+    let query = `
+        SELECT id, denominazione, pec, stato, attivare
+        FROM dealers
+        WHERE 1=1 
+    `;
+
+    const params: any[] = [];
+
+    if (filters.denominazione) {
+      query += ` AND denominazione LIKE ?`;
+      params.push(`%${filters.denominazione}%`);
+    }
+
+    if (filters.pec) {
+      query += ` AND pec LIKE ?`;
+      params.push(`%${filters.pec}%`);
+    }
+
+    if (filters.stato !== undefined) {
+      query += ` AND stato = ?`;
+      params.push(filters.stato);
+    }
+
+    if (filters.attivare !== undefined) {
+      query += ` AND attivare = ?`;
+      params.push(filters.attivare);
+    }
+
+    query += ` ORDER BY denominazione ASC`;
+
+    const dealers = await this.dataSource.query(query, params);
+    return dealers;
+  }
+
+  async updateDealerStatus(id: number, attivare: boolean): Promise<any> {
+    const result = await this.dataSource
+      .createQueryBuilder()
+      .update('dealers')
+      .set({ attivare })
+      .where("id = :id", { id })
+      .execute();
+
+    if (result.affected === 0) {
+      throw new NotFoundException(`Dealer with ID ${id} not found`);
+    }
+
+    return { message: 'Estado actualizado con éxito' };
+  }
+
+
 }

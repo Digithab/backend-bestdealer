@@ -7,9 +7,11 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FtpServiceService } from 'src/ftp-service/ftp-service.service';
 import { Response } from 'express';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 
 @Controller('dealer')
-@UseGuards(JwtAuthGuard) // Asegúrate de proteger estas rutas
+@UseGuards(JwtAuthGuard, RolesGuard) // Asegúrate de proteger estas rutas
 export class DealerController {
 
   constructor(
@@ -107,10 +109,8 @@ export class DealerController {
 
   @Get('venditore/:id')
   findVenditore(@Param('id') id: string | any) {
-
     return this.dealerService.findVenditore(id)
   }
-
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateDealerDto: UpdateDealerDto) {
@@ -131,7 +131,6 @@ export class DealerController {
   removeVenditore(@Param('id') id: string) {
     return this.dealerService.removeVenditore(+id);
   }
-
 
   @Get('download/allegati/:id')
   async download(
@@ -194,5 +193,30 @@ export class DealerController {
 
     // Devuelve el tipo MIME correspondiente o application/octet-stream si no está en la lista
     return mimeTypes[normalizedExtension] || 'application/octet-stream';
+  }
+
+  @Roles('Super Admin')
+  @Get('status/find')
+  async getDealerStatus(
+    @Query('denominazione') denominazione?: string,
+    @Query('pec') pec?: string,
+    @Query('stato') stato?: number,
+    @Query('attivare') attivare?: boolean,
+  ) {
+    return this.dealerService.getDealerStatus({
+      denominazione,
+      pec,
+      stato,
+      attivare
+    });
+  }
+
+  @Roles('Super Admin')
+  @Patch('status/update/:id')
+  async updateDealerStatus(
+    @Param('id') id: number,
+    @Body('attivare') attivare: boolean
+  ) {
+    return this.dealerService.updateDealerStatus(id, attivare);
   }
 }

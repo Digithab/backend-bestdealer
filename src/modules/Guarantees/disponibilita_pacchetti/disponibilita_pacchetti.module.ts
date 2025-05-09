@@ -4,9 +4,10 @@ import { DisponibilitaPacchettiController } from './disponibilita_pacchetti.cont
 import { UsersModule } from 'src/modules/users/users.module';
 import { MailService } from 'src/mail/mail.service';
 import { MailModule } from 'src/mail/mail.module';
+import { FtpServiceModule } from 'src/ftp-service/ftp-service.module';
 
 @Module({
-  imports: [UsersModule, MailModule],
+  imports: [UsersModule, MailModule, FtpServiceModule],
   controllers: [DisponibilitaPacchettiController],
   providers: [DisponibilitaPacchettiService, MailService],
   exports: [DisponibilitaPacchettiService]

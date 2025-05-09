@@ -21,11 +21,11 @@ import { FtpServiceModule } from 'src/ftp-service/ftp-service.module';
     forwardRef(() => OrdiniContrConsumoModule),
     UsersModule,
     forwardRef(() => MailModule),
-    GenPdfModule,
+    forwardRef(() => GenPdfModule),
     FtpServiceModule
   ],
   controllers: [ProformaController],
-  providers: [ProformaService, MailService, OrdiniContrConsumoService, GenPdfService],
+  providers: [ProformaService],
   exports: [ProformaService]
 })
 export class ProformaModule { }

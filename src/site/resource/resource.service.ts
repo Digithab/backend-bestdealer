@@ -215,13 +215,7 @@ export class ResourceService {
     return result || null;
   }
 
-  async updatePrezzo(id: string, prezzo: any, userId: string) {
-
-    const user = await this.validateUser(userId);
-
-    if (user.role !== 'admin') {
-      throw new ForbiddenException('No tienes permisos para crear garantías');
-    }
+  async updatePrezzo(id: string, prezzo: any) {
 
     const result = await this.dataSource.createQueryBuilder()
       .update('tipi_garanzie')

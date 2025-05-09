@@ -8,6 +8,7 @@ import { Dealer, User } from 'src/interfaces/interfaces';
 import { UsersService } from 'src/modules/users/users.service';
 import { addMonths, format, lastDayOfMonth, parseISO } from 'date-fns';
 import { ProformaService } from '../../Fatture/proforma/proforma.service';
+import { WrapperType } from 'src/generate-metadata';
 
 export const AbbonamentiSearchKeys = [
   'id',
@@ -37,7 +38,7 @@ export class AbbonamentiService {
     private usersService: UsersService,
 
     @Inject(forwardRef(() => ProformaService))
-    private proformaService: ProformaService
+    private proformaService: WrapperType<ProformaService>
 
   ) { }
 
@@ -59,12 +60,7 @@ export class AbbonamentiService {
       'yyyy-MM-dd'
     );
   }
-  async create(createAbbonamentiDto: any, userId: string) {
-    // Validación temprana del usuario
-    const user = await this.validateUser(userId);
-    if (user.role !== 'admin') {
-      throw new ForbiddenException('No tienes permisos para crear un abonamento');
-    }
+  async create(createAbbonamentiDto: any) {
 
     // Preparar datos del abonamiento
     const abbonamnenti = {
@@ -72,6 +68,8 @@ export class AbbonamentiService {
       data_inserimento: new Date(),
       data_inizio_abbonamento: new Date()
     };
+
+    console.log('createAbbonamentiDto___ ', createAbbonamentiDto)
 
     let newAbbonamentiId: number;
     let proformaIds: number[] = [];
@@ -123,7 +121,10 @@ export class AbbonamentiService {
 
     // Recalcular totales en paralelo
     await Promise.all(
-      proformaIds.map(id => this.proformaService.recalcTotaleProforma(id))
+      proformaIds.map(id => {
+        this.proformaService.recalcTotaleProforma(id)
+        this.proformaService.genPdfProforma(id)
+      })
     );
 
     return { success: true, abbonamentiId: newAbbonamentiId, proformaIds };
@@ -184,12 +185,7 @@ export class AbbonamentiService {
     return abbon
   }
 
-  async update(id: number, updateAbbonamentiDto: any, userId: string) {
-    // Validar usuario fuera de la transacción para fallar rápido
-    const user = await this.validateUser(userId);
-    if (user.role !== 'admin') {
-      throw new ForbiddenException('No tienes permisos para modificar un abonamento');
-    }
+  async update(id: number, updateAbbonamentiDto: any) {
 
     return await this.dataSource.transaction(async (manager) => {
       // Obtener el abonamiento a actualizar

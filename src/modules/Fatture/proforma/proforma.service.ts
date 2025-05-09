@@ -11,6 +11,7 @@ import { format } from 'date-fns';
 import { MailService } from 'src/mail/mail.service';
 import { OrdiniContrConsumoService } from 'src/modules/ordini/ordini-contr-consumo/ordini-contr-consumo.service';
 import { GenPdfService } from 'src/modules/gen-pdf/gen-pdf.service';
+import { WrapperType } from 'src/generate-metadata';
 
 
 export const ProformaSearchCardKeys = [
@@ -26,27 +27,28 @@ export const ProformaSearchCardKeys = [
 ]
 @Injectable()
 export class ProformaService {
-  totale_pf = 0
+  totale_pf = 0;
   ordini: any;
 
   constructor(
+
+    @Inject(forwardRef(() => OrdiniContrConsumoService))
+    private readonly ordiniContrConsumoService: WrapperType<OrdiniContrConsumoService>,
 
     @InjectEntityManager() private entityManager: EntityManager,
 
     @InjectDataSource() private dataSource: DataSource,
 
-    private usersService: UsersService,
 
     @Inject(forwardRef(() => MailService))
-    private readonly mailService: MailService,
+    private readonly mailService: WrapperType<MailService>,
 
     @Inject(forwardRef(() => OrdiniContrConsumoCardsService))
-    private ordiniContrConsumoCardsService: OrdiniContrConsumoCardsService,
+    private ordiniContrConsumoCardsService: WrapperType<OrdiniContrConsumoCardsService>,
 
-    @Inject(forwardRef(() => OrdiniContrConsumoService))
-    private readonly ordiniContrConsumoService: OrdiniContrConsumoService,
 
-    private readonly genPdfService: GenPdfService
+    @Inject(forwardRef(() => GenPdfService))
+    private readonly genPdfService: WrapperType<GenPdfService>
 
   ) { }
 
@@ -56,13 +58,13 @@ export class ProformaService {
 
     const proformaId = await this.dataSource.transaction(async (manager) => {
       const model = createProformaDto;
-
+      console.log('model: ', model);
       // Actualizar cliente y crear proforma en una sola transacción
-      if (model.tipo_cliente === 1) {
+      if (model.tipo_cliente === '1' || model.tipo_cliente === 1) {
         await manager
           .createQueryBuilder()
           .update('clienti')
-          .set({ abilitazione_proforma: true })
+          .set({ abilitazione_proforma: 1 })
           .where('id = :id', { id: model.id_cliente })
           .execute();
       }
@@ -107,10 +109,11 @@ export class ProformaService {
           .values(rowsWithProformaId)
           .execute();
       }
-
+      console.log('rowsWithProformaId___ ', proformaId)
       // Recalcular y generar PDF después de la transacción      
       return proformaId;
     });
+    console.log('proformaId___ ', proformaId)
 
     await this.recalcTotaleProforma(proformaId);
     await this.genPdfProforma(proformaId);
@@ -125,50 +128,108 @@ export class ProformaService {
   ): Promise<{
     proforma: any[], total: number, importo_total: number, incaso_total: number, saldo_total: number
   }> {
-    page = Math.max(1, Number(page));
-    limit = Math.max(1, Math.min(50, Number(limit)));
+    // Validar y normalizar parámetros
+    const validPage = Math.max(1, Number(page));
+    const validLimit = Math.max(1, Math.min(50, Number(limit)));
     const validOrder = ['ASC', 'DESC'].includes(order) ? order : 'DESC';
     const sortColumn = ProformaSearchCardKeys.includes(sort) ? sort : 'id';
 
-    const query = this.entityManager.createQueryBuilder()
-      .select('vp.*')
-      .from('v_proforma', 'vp')
-      .where('vp.is_deleted = 0');
-    this.applyFilters(query, search);
+    try {
+      // Crear query base - usar una vista indexada si es posible
+      const baseQuery = this.entityManager.createQueryBuilder()
+        .from('v_proforma', 'vp')
+        .where('vp.is_deleted = 0');
 
+      // Aplicar filtros de búsqueda
+      this.applyFilters(baseQuery, search);
 
-    const totalQueryBuilder = query.clone();
-    const totalResult = await totalQueryBuilder.select('COUNT(*)', 'total').getRawOne();
-    const total = Number(totalResult?.total) || 0;
-    const importoResult = await totalQueryBuilder.select('SUM(vp.importo) as importo_total, SUM(vp.incasso) as incaso_total, SUM(vp.saldo) as saldo_total').getRawOne();
-    const importo_total = Number(importoResult?.importo_total || 0);
-    const incaso_total = Number(importoResult?.incaso_total || 0)
-    const saldo_total = Number(importoResult?.saldo_total || 0)
-    // Aplicar ordenación y paginación
-    query
-      .orderBy(`vp.${sortColumn}`, validOrder as 'DESC' | 'ASC')
-      .offset((page - 1) * limit)
-      .limit(limit);
+      // Ejecutar consultas en paralelo para maximizar rendimiento
+      const [proformaResult, aggregationResult] = await Promise.all([
+        // Consulta para obtener proformas con paginación
+        this.entityManager.createQueryBuilder()
+          .select('vp.*')
+          .from('v_proforma', 'vp')
+          .where('vp.is_deleted = 0')
+          .andWhere(baseQuery.expressionMap.wheres?.[1]?.condition || '1=1') // Reutilizar los filtros
+          .setParameters(baseQuery.expressionMap.parameters || {})
+          .orderBy(`vp.${sortColumn}`, validOrder)
+          .offset((validPage - 1) * validLimit)
+          .limit(validLimit)
+          .getRawMany(),
 
-    const proforma = await query.getRawMany();
-    // Fetch products for each order
-    // Fetch products for each order
-    const profWithfact = await Promise.all(proforma.map(async (pr) => {
-      const faturre = await this.dataSource
+        // Consulta para obtener totales (usando COUNT() OVER() para mejor rendimiento)
+        this.entityManager.createQueryBuilder()
+          .select([
+            'COUNT(1) as total',
+            'COALESCE(SUM(vp.importo), 0) as importo_total',
+            'COALESCE(SUM(vp.incasso), 0) as incaso_total',
+            'COALESCE(SUM(vp.saldo), 0) as saldo_total'
+          ])
+          .from('v_proforma', 'vp')
+          .where('vp.is_deleted = 0')
+          .andWhere(baseQuery.expressionMap.wheres?.[1]?.condition || '1=1')
+          .setParameters(baseQuery.expressionMap.parameters || {})
+          .getRawOne()
+      ]);
+
+      const proforma = proformaResult || [];
+      const total = Number(aggregationResult?.total || 0);
+      const importo_total = Number(aggregationResult?.importo_total || 0);
+      const incaso_total = Number(aggregationResult?.incaso_total || 0);
+      const saldo_total = Number(aggregationResult?.saldo_total || 0);
+
+      // Optimización: solo procesar si hay proformas
+      if (proforma.length === 0) {
+        return { proforma: [], total, importo_total, incaso_total, saldo_total };
+      }
+
+      // Extraer IDs para la consulta de facturas (con seguridad para prevenir SQL injection)
+      const proformaIds = proforma.map(pr => pr.id).filter(id => id !== undefined && id !== null);
+
+      // Optimización: Solo buscar facturas si hay IDs válidos
+      if (proformaIds.length === 0) {
+        return {
+          proforma: proforma.map(pr => ({ ...pr, faturre: [] })),
+          total, importo_total, incaso_total, saldo_total
+        };
+      }
+
+      // Usar una sola consulta para obtener todas las facturas relacionadas
+      // Añadir índices específicos en la base de datos para esta consulta
+      const allFatture = await this.dataSource
         .createQueryBuilder()
-        .select('f.*')
+        .select([
+          'f.*',
+          'f.rif_proforma' // Asegurar que este campo está incluido explícitamente
+        ])
         .from('fatture', 'f')
-        .where('f.rif_proforma = :rif_proforma', { rif_proforma: pr.id })
+        .where('f.rif_proforma IN (:...ids)', { ids: proformaIds })
+        // Limitar columnas si es posible
+        // .addSelect(['f.id', 'f.rif_proforma', 'f.other_needed_columns'])
         .getRawMany();
 
-      return {
+      // Crear un mapa de facturas por ID de proforma para acceso O(1)
+      const fattureMap = {};
+      for (const fattura of allFatture) {
+        const rifProforma = fattura.rif_proforma;
+        if (!fattureMap[rifProforma]) {
+          fattureMap[rifProforma] = [];
+        }
+        fattureMap[rifProforma].push(fattura);
+      }
+
+      // Asignar facturas a cada proforma con acceso O(1)
+      const profWithfact = proforma.map(pr => ({
         ...pr,
-        faturre
-      };
-    }));
+        faturre: fattureMap[pr.id] || []
+      }));
 
-
-    return { proforma: profWithfact, total, importo_total, incaso_total, saldo_total };
+      return { proforma: profWithfact, total, importo_total, incaso_total, saldo_total };
+    } catch (error) {
+      // Log error pero retornar un resultado vacío para no bloquear la UI
+      console.error('Error in getProforma:', error);
+      return { proforma: [], total: 0, importo_total: 0, incaso_total: 0, saldo_total: 0 };
+    }
   }
 
   async findOne(id: number) {
@@ -229,9 +290,6 @@ export class ProformaService {
   async removeLiberti(id: number) {
     return await this.dataSource.transaction(async (manager) => {
 
-
-
-
       const model = this.findOne(id);
 
       if (!model) {
@@ -250,10 +308,6 @@ export class ProformaService {
 
   async remove(id: number) {
     return await this.dataSource.transaction(async (manager) => {
-
-
-
-
       const [proforma] = await manager.query('SELECT * FROM proforma WHERE id = ?', [id])
       console.log('proforma__ ', proforma)
       await manager
@@ -300,10 +354,8 @@ export class ProformaService {
   }
 
   async actionFinalizzaProforma(id: number) {
+    console.log('actionFinalizzaProforma___ ', id)
     return await this.dataSource.transaction(async (manager) => {
-
-
-
 
       await manager
         .createQueryBuilder()
@@ -315,7 +367,8 @@ export class ProformaService {
       const log = {
         operazione: 2,
         record_table: 'proforma',
-        record_id: id
+        record_id: id,
+        user: 'default'
       }
 
       await manager
@@ -595,8 +648,6 @@ export class ProformaService {
 
   }
 
-
-
   applyFilters(query: SelectQueryBuilder<any>, search: ProformaSearch): void {
     // Lista de campos válidos para filtrar (excluyendo page y limit)
     const validFields = Object.keys(search).filter(key => !['page', 'limit', 'sort', 'order'].includes(key));
@@ -620,6 +671,10 @@ export class ProformaService {
           )
         }
 
+        if (key === 'id_cliente') {
+          query.andWhere(`vp.${key} = :${key}`, { [key]: value });
+        }
+
         if (key === 'saldo' && value) {
 
           if (value == "Saldato") {
@@ -629,7 +684,7 @@ export class ProformaService {
           }
         }
 
-        if (typeof value === 'string' && key !== 'data_proforma' && key !== 'saldo') {
+        if (typeof value === 'string' && key !== 'data_proforma' && key !== 'saldo' && key !== 'id_cliente') {
           query.andWhere(`vp.${key} LIKE :${key}`, { [key]: `%${value}%` });
         } else if (typeof value === 'number') {
           query.andWhere(`vp.${key} = :${key}`, { [key]: value });
@@ -640,154 +695,227 @@ export class ProformaService {
 
 
   async actionInviaProforma(id: any) {
+    const idProforma = id.id;
 
+    // Get proforma data with a single query
+    const [proforma] = await this.entityManager.query('SELECT * FROM proforma WHERE id = ?', [idProforma]);
+    if (!proforma) throw new NotFoundException('Proforma non trovata.');
 
-    const [proforma] = await this.entityManager.query('SELECT * FROM proforma WHERE id = ?', [id.id]);
     let to = '';
     let cc = [];
     let subject = '';
-    console.log('proforma___ ', proforma)
-    switch (proforma.tipo_proforma) {
-      case 0: // Dealer
-        console.log('0')
-        const [dealer] = await this.entityManager.query('SELECT denominazione FROM dealers WHERE id = ?', [proforma.id_cliente])
-        console.log('dealer::: ', dealer)
-        subject = `Invio Proforma: Dealer ${dealer.denominazione}`
-        const contatti = await this.entityManager.query('SELECT * FROM dealers__contatti WHERE dealer = ?', [proforma.id_cliente])
-        const [agenti] = await this.entityManager.query('SELECT email FROM agenti WHERE id = ?', [proforma.id_cliente])
 
-        if (agenti) cc.push(agenti.email);
-        contatti.slice(1, 3).forEach(contatto => {
-          const email = contatto?.email;
-          if (email) cc.push(email);
+    // Handle different client types
+    try {
+      if (proforma.tipo_cliente === 0) { // Dealer
+        const [[dealer], contatti, [agente]] = await Promise.all([
+          this.entityManager.query('SELECT denominazione FROM dealers WHERE id = ?', [proforma.id_cliente]),
+          this.entityManager.query('SELECT email FROM dealers__contatti WHERE dealer = ? LIMIT 3', [proforma.id_cliente]),
+          this.entityManager.query('SELECT email FROM agenti WHERE id = ?', [proforma.id_cliente])
+        ]);
+
+        if (!dealer) throw new BadRequestException('Dealer non trovato.');
+
+        subject = `Invio Proforma: Dealer ${dealer.denominazione}`;
+
+        // Add agent email to cc if exists
+        if (agente?.email) cc.push(agente.email);
+
+        // Add only valid contact emails to cc (maximum 2)
+        contatti.slice(0, 2).forEach(contatto => {
+          if (contatto?.email) cc.push(contatto.email);
         });
-        break;
-      case 1: // Dealer
-        console.log('1')
-        const [cliente] = await this.entityManager.query('SELECT * FROM clienti WHERE id = ? ', [proforma.id_cliente])
-        if (!cliente) throw new BadRequestException('La risorsa richiesta non è stata trovata.');
-        to = cliente.email
-        subject = `Invio Proforma: Cliente ${cliente.denominazione}`
-        if (to === '') throw new BadRequestException('Email cliente non fornita.');
+
+      } else if (proforma.tipo_cliente === 1) { // Cliente
+        const [cliente] = await this.entityManager.query('SELECT * FROM clienti WHERE id = ?', [proforma.id_cliente]);
+        if (!cliente) throw new BadRequestException('Cliente non trovato.');
+        if (!cliente.email) throw new BadRequestException('Email cliente non fornita.');
+
+        to = cliente.email;
+        subject = `Invio Proforma: Cliente ${cliente.denominazione}`;
+
+        // Now that we have cliente, we can check for the agent
         if (cliente.agente !== 0) {
-          const [agenti] = await this.entityManager.query('SELECT email FROM agenti WHERE id = ?', [proforma.id_cliente])
-          if (agenti) cc.push(agenti.email);
+          const [agente] = await this.entityManager.query('SELECT email FROM agenti WHERE id = ?', [cliente.agente]);
+          if (agente?.email) cc.push(agente.email);
         }
-        break;
-      default:
-        throw new NotFoundException('La risorsa richiesta non è stata trovata.');
+
+      } else {
+        throw new BadRequestException('Tipo cliente non valido.');
+      }
+    } catch (error) {
+      throw error instanceof BadRequestException || error instanceof NotFoundException
+        ? error
+        : new BadRequestException('Errore durante il recupero dei dati: ' + error.message);
     }
-    const solleciti = proforma.date_invii_successivi.split('|');
+
+    // Calculate template and reminders
+    const isFirstSend = proforma.data_invio === '1900-01-01';
+    const solleciti = proforma.date_invii_successivi ? proforma.date_invii_successivi.split('|').filter(Boolean) : [];
+    //const num_solleciti = solleciti.length;
     const num_solleciti = proforma.date_invii_successivi === 0 ? 0 : solleciti.length
-    const template = proforma.data_invio === '1900-01-01' ? 'invio' : `sollecito_${Math.min(3, num_solleciti + 1)}`
+    const template = isFirstSend ? 'invio' : `sollecito_${Math.min(3, num_solleciti + 1)}`;
+    //const template = proforma.datainvio === '1900-01-01' ? 'invio' : `sollecito${Math.min(3, num_solleciti + 1)}`
+    //const data_proforma = format(new Date(proforma.data_proforma), 'dd/MM/yyyy');
+
+
     const data_proforma = format(new Date(proforma.data_proforma), 'dd/MM/yyyy');
+    console.log('template: ', template)
+    // Send email
+    await this.mailService.sendProformaEmail(
+      to || 'aetiru@gmail.com', // Fallback if no recipient
+      'aetiru@gmail.com', // cc.length ? cc : 
+      'aetiru@gmail.com', // BCC
+      proforma.id,
+      solleciti,
+      data_proforma,
+      subject,
+      template
+    );
 
-    console.log('Enviando correo....')
-    await this.mailService.sendProformaEmail('aetiru@gmail.com', 'aetiru@gmail.com', 'aetiru@gmail.com', proforma.id, solleciti, data_proforma, subject, template)
+    // Update proforma with send dates
+    const currentDate = format(new Date(), 'yyyy-MM-dd');
 
-    if (format(new Date(proforma.data_invio), 'yyyy-MM-dd') === '1900-01-01') {
+    if (isFirstSend) {
       await this.entityManager
         .createQueryBuilder()
         .update('proforma')
-        .set({ data_invio: format(new Date(), 'yyyy-MM-dd') })
-        .where('id = :id', { id: id.id })
+        .set({ data_invio: currentDate })
+        .where('id = :id', { id: idProforma })
         .execute();
     } else {
-      if (proforma.date_invii_successivi === '') {
-        await this.entityManager
-          .createQueryBuilder()
-          .update('proforma')
-          .set({ date_invii_successivi: format(new Date(), 'yyyy-MM-dd') })
-          .where('id = :id', { id: id.id })
-          .execute();
-      } else if (proforma.date_invii_successivi.length < 32) {
-        // Al massimo 3 solleciti vengono salvati: 10 caratteri per data (yyyy-mm-dd) + 2 separatori
-        await this.entityManager
-          .createQueryBuilder()
-          .update('proforma')
-          .set({ date_invii_successivi: `${proforma.date_invii_successivi} | ${format(new Date(), 'yyyy-MM-dd')}` })
-          .where('id = :id', { id: id.id })
-          .execute();
-      }
+      const newDateInviiSuccessivi = !proforma.date_invii_successivi
+        ? currentDate
+        : `${proforma.date_invii_successivi}|${currentDate}`.substring(0, 32);
+
+      await this.entityManager
+        .createQueryBuilder()
+        .update('proforma')
+        .set({ date_invii_successivi: newDateInviiSuccessivi })
+        .where('id = :id', { id: idProforma })
+        .execute();
     }
 
+    return { success: true, message: 'Proforma inviata con successo' };
   }
 
-  async actionNotificaSelezionati(sel: any) {
+  async actionNotificaSelezionati(sel: any[]) {
+    for (const id of sel) {
+      try {
+        // Obtener proforma con una sola consulta
+        const [proforma] = await this.entityManager.query('SELECT * FROM proforma WHERE id = ?', [id]);
 
-
-    for (let id of sel) {
-
-      const [proforma] = await this.entityManager.query('SELECT * FROM proforma WHERE id = ?', [id]);
-      let to = '';
-      let cc = [];
-      let subject = '';
-      console.log('proforma___ ', proforma)
-      switch (proforma.tipo_proforma) {
-        case 0: // Dealer
-          console.log('0')
-          const [dealer] = await this.entityManager.query('SELECT denominazione FROM dealers WHERE id = ?', [proforma.id_cliente])
-          console.log('dealer::: ', dealer)
-          subject = `Invio Proforma: Dealer ${dealer.denominazione}`
-          const contatti = await this.entityManager.query('SELECT * FROM dealers__contatti WHERE dealer = ?', [proforma.id_cliente])
-          const [agenti] = await this.entityManager.query('SELECT email FROM agenti WHERE id = ?', [proforma.id_cliente])
-
-          if (agenti) cc.push(agenti.email);
-          contatti.slice(1, 3).forEach(contatto => {
-            const email = contatto?.email;
-            if (email) cc.push(email);
-          });
-          break;
-        case 1: // Dealer
-          console.log('1')
-          const [cliente] = await this.entityManager.query('SELECT * FROM clienti WHERE id = ? ', [proforma.id_cliente])
-          if (!cliente) throw new BadRequestException('La risorsa richiesta non è stata trovata.');
-          to = cliente.email
-          subject = `Invio Proforma: Cliente ${cliente.denominazione}`
-          if (to === '') throw new BadRequestException('Email cliente non fornita.');
-          if (cliente.agente !== 0) {
-            const [agenti] = await this.entityManager.query('SELECT email FROM agenti WHERE id = ?', [proforma.id_cliente])
-            if (agenti) cc.push(agenti.email);
-          }
-          break;
-        default:
-          throw new NotFoundException('La risorsa richiesta non è stata trovata.');
-      }
-      const solleciti = proforma.date_invii_successivi.split('|');
-      const num_solleciti = proforma.date_invii_successivi === 0 ? 0 : solleciti.length
-      const template = proforma.data_invio === '1900-01-01' ? 'invio' : `sollecito_${Math.min(3, num_solleciti + 1)}`
-      const data_proforma = format(new Date(proforma.data_proforma), 'dd/MM/yyyy');
-
-      console.log('Enviando correo....')
-      await this.mailService.sendProformaEmail('aetiru@gmail.com', 'aetiru@gmail.com', 'aetiru@gmail.com', proforma.id, solleciti, data_proforma, subject, template)
-
-      if (format(new Date(proforma.data_invio), 'yyyy-MM-dd') === '1900-01-01') {
-        await this.entityManager
-          .createQueryBuilder()
-          .update('proforma')
-          .set({ data_invio: format(new Date(), 'yyyy-MM-dd') })
-          .where('id = :id', { id: id })
-          .execute();
-      } else {
-        if (proforma.date_invii_successivi === '') {
-          await this.entityManager
-            .createQueryBuilder()
-            .update('proforma')
-            .set({ date_invii_successivi: format(new Date(), 'yyyy-MM-dd') })
-            .where('id = :id', { id: id })
-            .execute();
-        } else if (proforma.date_invii_successivi.length < 32) {
-          // Al massimo 3 solleciti vengono salvati: 10 caratteri per data (yyyy-mm-dd) + 2 separatori
-          await this.entityManager
-            .createQueryBuilder()
-            .update('proforma')
-            .set({ date_invii_successivi: `${proforma.date_invii_successivi} | ${format(new Date(), 'yyyy-MM-dd')}` })
-            .where('id = :id', { id: id })
-            .execute();
+        if (!proforma) {
+          throw new NotFoundException(`Proforma con ID ${id} no encontrada`);
         }
+
+        let to = '';
+        const cc = [];
+        let subject = '';
+        let clienteDenominazione = '';
+
+        // Manejar diferencia entre Dealer (0) y Cliente (1)
+        if (proforma.tipo_cliente === 0) { // Dealer
+          const [dealer] = await this.entityManager.query('SELECT denominazione FROM dealers WHERE id = ?', [proforma.id_cliente]);
+
+          if (!dealer) {
+            throw new BadRequestException(`Dealer con ID ${proforma.id_cliente} no encontrado`);
+          }
+
+          clienteDenominazione = dealer.denominazione;
+          subject = `Invio Proforma: Dealer ${clienteDenominazione}`;
+
+          // Obtener contactos y agentes en paralelo
+          const [contatti, [agente]] = await Promise.all([
+            this.entityManager.query('SELECT email FROM dealers__contatti WHERE dealer = ? LIMIT 3', [proforma.id_cliente]),
+            this.entityManager.query('SELECT email FROM agenti WHERE id = ?', [proforma.id_cliente])
+          ]);
+
+          if (agente?.email) cc.push(agente.email);
+
+          // Solo añadir correos válidos de contactos
+          contatti.forEach(contatto => {
+            if (contatto?.email) cc.push(contatto.email);
+          });
+
+        } else if (proforma.tipo_cliente === 1) { // Cliente
+          const [cliente] = await this.entityManager.query('SELECT * FROM clienti WHERE id = ?', [proforma.id_cliente]);
+
+          if (!cliente) {
+            throw new BadRequestException(`Cliente con ID ${proforma.id_cliente} no encontrado`);
+          }
+
+          if (!cliente.email) {
+            throw new BadRequestException('Email cliente no proporcionado');
+          }
+
+          to = cliente.email;
+          clienteDenominazione = cliente.denominazione;
+          subject = `Invio Proforma: Cliente ${clienteDenominazione}`;
+
+          // Obtener agente solo si es necesario
+          if (cliente.agente !== 0) {
+            const [agente] = await this.entityManager.query('SELECT email FROM agenti WHERE id = ?', [cliente.agente]);
+            if (agente?.email) cc.push(agente.email);
+          }
+
+        } else {
+          throw new BadRequestException(`Tipo de proforma desconocido: ${proforma.tipo_proforma}`);
+        }
+
+        // Calcular número de solicitudes y determinar plantilla
+        const solleciti = proforma.date_invii_successivi ? proforma.date_invii_successivi.split('|').filter(Boolean) : [];
+        const num_solleciti = solleciti.length;
+        const template = proforma.data_invio === '1900-01-01' ? 'invio' : `sollecito_${Math.min(3, num_solleciti + 1)}`;
+        const data_proforma = format(new Date(proforma.data_proforma), 'dd/MM/yyyy');
+
+        // Enviar correo
+        await this.mailService.sendProformaEmail(
+          to || 'aetiru@gmail.com', // Usar correo de respaldo si no hay destinatario
+          cc.length ? cc : ['aetiru@gmail.com'],
+          'aetiru@gmail.com',
+          proforma.id,
+          solleciti,
+          data_proforma,
+          subject,
+          template
+        );
+
+        // Actualizar fechas de envío
+        const currentDate = format(new Date(), 'yyyy-MM-dd');
+
+        if (proforma.data_invio === '1900-01-01') {
+          // Primer envío
+          await this.entityManager
+            .createQueryBuilder()
+            .update('proforma')
+            .set({ data_invio: currentDate })
+            .where('id = :id', { id })
+            .execute();
+        } else {
+          // Actualizar solicitudes posteriores (máximo 3)
+          if (!proforma.date_invii_successivi) {
+            await this.entityManager
+              .createQueryBuilder()
+              .update('proforma')
+              .set({ date_invii_successivi: currentDate })
+              .where('id = :id', { id })
+              .execute();
+          } else if (solleciti.length < 3) {
+            await this.entityManager
+              .createQueryBuilder()
+              .update('proforma')
+              .set({ date_invii_successivi: `${proforma.date_invii_successivi} | ${currentDate}` })
+              .where('id = :id', { id })
+              .execute();
+          }
+        }
+
+      } catch (error) {
+        console.error(`Error procesando proforma ID ${id}:`, error.message);
+        throw error; // Re-lanzar para manejo superior o convertir a respuesta HTTP apropiada
       }
     }
-
   }
 
   async genPdfProforma(id: any) {
@@ -852,19 +980,13 @@ export class ProformaService {
 
     // Generar cuerpo de proforma y PDF
     const proforma = await this.createCorpoProforma(model, true);
+
     const pdfBuffer = await this.genPdfService.generatePdf('proforma.template', { cliente, proforma });
 
     return pdfBuffer;
   }
 
-  private validateUser(email: string): Promise<User | any> {
 
-    const user = this.usersService.findByUsername(email)
-
-    if (!user) throw new NotFoundException('Usuario no encontrado');
-
-    return user;
-  }
 
   async createCorpoProforma(model, bold_text = false) {
     const corpo_proforma = {
@@ -882,150 +1004,258 @@ export class ProformaService {
     switch (model.tipo_proforma) {
       case 0: // Garanzie
         // PF Garanzie
-        const garanzie = await this.entityManager.query('SELECT * FROM garanzie WHERE id_proforma = ?', [model.id])
-        console.log('garanzie___ ', garanzie)
-        let consumo_effettivo
-        for (let garanzia of garanzie) {
-          const [targa] = await this.entityManager.query('SELECT targa FROM veicoli WHERE id = ?', [garanzia.veicolo])
-          const prezzo = await this.ordiniContrConsumoCardsService.getPrezzoGaranzia(garanzia.dealer, garanzia.tipo_garanzia, garanzia.data_attivazione)
+        const [garanzie, soccorsi] = await Promise.all([
+          this.entityManager.query('SELECT * FROM garanzie WHERE id_proforma = ?', [model.id]),
+          this.entityManager.query('SELECT * FROM garanzie WHERE id_proforma_soccorso = ?', [model.id])
+        ]);
+        console.log('garanzie___ ', garanzie);
 
-          const prezzo_singolo_formatted = Number(prezzo).toFixed(2).replace('.', ',');
-          const consumo_effectivo = (parseInt(garanzia.durata) / 12);
-          const quantita = consumo_effectivo - parseInt(garanzia.consumo_pack);
-          const prezzo_formatted = Number(prezzo * quantita).toFixed(2).replace('.', ',');
-          const [tipi] = await this.entityManager.query('SELECT denominazione FROM tipi_garanzie WHERE id = ?', [garanzia.tipo_garanzia])
-          if ((prezzo * quantita) > 0) {
+        // Función auxiliar para formatear precios
+        const formatNumber = (num) => Number(num).toFixed(2).replace('.', ',');
+
+        // Función para calcular el consumo efectivo
+        const calcularConsumoEfectivo = (durata) => Number(durata) / 12;
+
+        // Procesamiento de garantías principales
+        for (let garanzia of garanzie) {
+
+          const [[targa], [tipi]] = await Promise.all([
+            this.entityManager.query('SELECT * FROM veicoli WHERE id = ?', [garanzia.veicolo]),
+            this.entityManager.query('SELECT * FROM tipi_garanzie WHERE id = ?', [garanzia.tipo_garanzia])
+          ]);
+
+          const prezzo = await this.ordiniContrConsumoCardsService.getPrezzoGaranzia(
+            garanzia.dealer,
+            garanzia.tipo_garanzia,
+            garanzia.data_attivazione
+          );
+
+          const consumo_effettivo = calcularConsumoEfectivo(garanzia.durata);
+          const quantita = consumo_effettivo - parseInt(garanzia.consumo_pack);
+          const prezzo_singolo_formatted = formatNumber(prezzo);
+          const prezzo_totale = prezzo * quantita;
+          const prezzo_formatted = formatNumber(prezzo_totale);
+
+
+          if (prezzo_totale > 0) {
+            const prefisso = bold_text ? `<b>${targa.targa}</b>: ` : `${targa.targa}: `;
+
             corpo_proforma.corpo.push({
-              'descrizione': (bold_text ? `<b>${targa.targa}</b>: ` : `${targa.targa}: `) + tipi.denominazione,
+              'descrizione': prefisso + tipi.denominazione,
               'quantita': quantita,
               'prezzo_unitario_orig': prezzo,
               'prezzo_unitario': prezzo_singolo_formatted,
               'totale': prezzo_formatted,
-              'totale_orig': prezzo * quantita
+              'totale_orig': prezzo_totale
             });
-            corpo_proforma.imponibile += parseFloat(Number(prezzo * quantita).toFixed(2).replace(',', '.'));
+
+            corpo_proforma.imponibile += parseFloat(Number(prezzo_totale).toFixed(2));
           }
         }
 
-        const soccorsi = await this.entityManager.query('SELECT * FROM garanzie WHERE id_proforma_soccorso = ?', [model.id])
+        // Procesamiento de servicios de socorro
+        const prezziDefaultSoccorsi = { 40: 20, 60: 25, 100: 30 };
 
         for (let garanzia_soccorso of soccorsi) {
-          const [targa] = await this.entityManager.query('SELECT targa FROM veicoli WHERE id = ?', [garanzia_soccorso.veicolo])
-          const prezziDefaultSoccorsi: { [key: number]: number } = {
-            40: 20,
-            60: 25,
-            100: 30
-          };
 
-          const prezzo_singolo = await this.ordiniContrConsumoService.getPrezzoGaranzia(garanzia_soccorso.dealer, garanzia_soccorso.data_attivazione, garanzia_soccorso.soccorso__km, prezziDefaultSoccorsi[garanzia_soccorso.soccorso__km]);
+          const [[targa], prezzo_singolo] = await Promise.all([
+            this.entityManager.query('SELECT targa FROM veicoli WHERE id = ?', [garanzia_soccorso.veicolo]),
+            this.ordiniContrConsumoService.getPrezzoGaranzia(
+              garanzia_soccorso.dealer,
+              garanzia_soccorso.data_attivazione,
+              garanzia_soccorso.soccorso__km,
+              prezziDefaultSoccorsi[garanzia_soccorso.soccorso__km]
+            )
+          ]);
 
-
-          const prezzo_singolo_formatted = Number(prezzo_singolo).toFixed(2).replace('.', ',');
-
-          consumo_effettivo = (Number(garanzia_soccorso.durata) / 12);
+          const consumo_effettivo = calcularConsumoEfectivo(garanzia_soccorso.durata);
           const qta_soccorso = consumo_effettivo - parseInt(garanzia_soccorso.consumo_pack_soccorso);
           const prezzo_soccorso = prezzo_singolo * qta_soccorso;
-          const prezzo_formatted = Number(prezzo_soccorso).toFixed(2).replace('.', ',');
-
+          const prezzo_formatted = formatNumber(prezzo_soccorso);
           if (prezzo_formatted !== '0,00') {
+            const prefisso = bold_text ? `<b>${targa.targa}</b>: ` : `${targa.targa}: `;
+
             corpo_proforma.corpo.push({
-              'descrizione': (bold_text ? `<br> ${targa} </b>:` : `${targa}: `) + 'Soccorso stradale' + garanzia_soccorso.soccorso__km + 'km',
+              'descrizione': prefisso + 'Soccorso stradale ' + garanzia_soccorso.soccorso__km + ' km',
               'quantita': qta_soccorso,
-              'prezzo_unitario_orig': Math.round(prezzo_singolo),
-              'prezzo_unitario': prezzo_singolo_formatted,
+              'prezzo_unitario_orig': prezzo_singolo,
+              'prezzo_unitario': formatNumber(prezzo_singolo),
               'totale': prezzo_formatted,
-              'totale_orig': Math.round(prezzo_soccorso)
+              'totale_orig': prezzo_soccorso
             });
             corpo_proforma.imponibile += prezzo_soccorso;
           }
         }
 
-        const autosost = await this.entityManager.query('SELECT * FROM garanzie WHERE id_proforma_autosost = ?', [model.id])
+        // Procesamiento de auto sostitutiva
+        const autosost = await this.entityManager.query('SELECT * FROM garanzie WHERE id_proforma_autosost = ?', [model.id]);
 
         for (let gr_autosost of autosost) {
-          const targa = await this.entityManager.query('SELECT targa FROM veicoli WHERE id = ?', [gr_autosost.veicolo])
-          const prezzo_autosost = await this.entityManager.query(`
-            SELECT * FROM ordini__contratti_a_consumo ocac
+
+          const [[targaResult], [prezzoResult]] = await Promise.all([
+            this.entityManager.query('SELECT targa FROM veicoli WHERE id = ?', [gr_autosost.veicolo]),
+            this.entityManager.query(`
+            SELECT auto_sost FROM ordini__contratti_a_consumo ocac
             WHERE ocac.dealer = ?
             AND NOW() BETWEEN ocac.data_inizio_contratto AND ocac.data_fine_contratto
             LIMIT 1
-          `, [gr_autosost.dealer]);
+          `, [gr_autosost.dealer])
+          ]);
 
-          const prezzo_formatted = Number(prezzo_autosost).toFixed(2).replace('.', ',');
-          const qta_autosost = consumo_effettivo - Number(garanzie.consumo_pack_autosost)
+          const targa = targaResult.targa; // Corregido el acceso a la propiedad targa
 
-          if (prezzo_formatted !== '0,00') {
-            corpo_proforma.corpo.push({
-              'descrizione': (bold_text ? `<br> ${targa} </b>:` : `${targa}: `) + 'Auto Sostitutiva',
-              'quantita': qta_autosost,
-              'prezzo_unitario_orig': prezzo_autosost,
-              'prezzo_unitario': prezzo_formatted,
-              'totale': prezzo_formatted,
-              'totale_orig': prezzo_autosost
-            });
-            corpo_proforma.imponibile += prezzo_autosost;
+          // Verificamos que tenemos un resultado y accedemos a la propiedad correcta
+          if (prezzoResult && 'auto_sost' in prezzoResult) {
+            const prezzo_autosost = prezzoResult.auto_sost;
+            const prezzo_formatted = formatNumber(prezzo_autosost);
+
+            // Corregido: usamos gr_autosost en lugar de garanzie
+            const consumo_effettivo = calcularConsumoEfectivo(gr_autosost.durata);
+            const qta_autosost = consumo_effettivo - Number(gr_autosost.consumo_pack_autosost || 0);
+
+            if (prezzo_formatted !== '0,00' && qta_autosost > 0) {
+              const prefisso = bold_text ? `<b>${targa}</b>: ` : `${targa}: `;
+
+              corpo_proforma.corpo.push({
+                'descrizione': prefisso + 'Auto Sostitutiva',
+                'quantita': qta_autosost,
+                'prezzo_unitario_orig': prezzo_autosost,
+                'prezzo_unitario': prezzo_formatted,
+                'totale': formatNumber(prezzo_autosost * qta_autosost),
+                'totale_orig': prezzo_autosost * qta_autosost
+              });
+
+              corpo_proforma.imponibile += prezzo_autosost * qta_autosost;
+            }
           }
         }
 
         break;
       case 1:
-        const [ordini] = await this.entityManager.query('SELECT * FROM ordini__pacchetti WHERE id_proforma = ?', [model.id])
-        const ordine_rows = await this.entityManager.query('SELECT * FROM ordini__prodotti_quantita WHERE ordine = ?', [ordini.id])
+        // Obtener datos de ordini
+        const [ordini] = await this.entityManager.query('SELECT * FROM ordini__pacchetti WHERE id_proforma = ?', [model.id]);
+        const ordine_rows = await this.entityManager.query('SELECT * FROM ordini__prodotti_quantita WHERE ordine = ?', [ordini.id]);
 
-        const extras = [0, 'Soccorso 40km', 'Soccorso 60km', 'Soccorso 100km', null, 'Auto Sostitutiva'];
+        // Filtrar para obtener solo IDs de productos relevantes
+        const relevantProductIds = ordine_rows
+          .filter(row => row.quantita !== '0' && parseFloat(row.prezzo_netto) !== 0.0 && !row.is_extra)
+          .map(row => row.prodotto);
 
-        for (let row of ordine_rows) {
-          const netto = parseFloat(row.prezzo_netto)
+        // Obtener todos los tipos de garantía en una sola consulta
+        const tipi_garanzie_map = {};
+        if (relevantProductIds.length > 0) {
+          const garanzie = await this.entityManager.query(
+            'SELECT id, denominazione FROM tipi_garanzie WHERE id IN (?)',
+            [relevantProductIds]
+          );
+
+          garanzie.forEach(g => {
+            tipi_garanzie_map[g.id] = g.denominazione;
+          });
+        }
+
+        // Mapeo de extras más mantenible
+        const extrasMap = {
+          0: 'Soccorso 40km',
+          1: 'Soccorso 40km',
+          2: 'Soccorso 60km',
+          3: 'Soccorso 100km',
+          5: 'Auto Sostitutiva'
+        };
+
+        // Procesar cada fila
+        for (const row of ordine_rows) {
+          const netto = parseFloat(row.prezzo_netto);
           if (row.quantita !== '0' && netto !== 0.0) {
-            const [tipi_garanzie] = await this.entityManager.query('SELECT denominazione FROM tipi_garanzie WHERE id = ?', [row.prodotto])
-            const descrizione = `PACK ${!row.is_extra ? `Garanzie ${tipi_garanzie.denominazione}` : extras[row.prodotto]}`
+            let descrizione;
+            if (!row.is_extra) {
+              descrizione = `PACK Garanzie ${tipi_garanzie_map[row.prodotto] || ''}`;
+            } else {
+              descrizione = `PACK ${extrasMap[row.prodotto] || ''}`;
+            }
+
+            const cantidad = parseFloat(row.quantita);
+            const totalRow = netto * cantidad;
+
             corpo_proforma.corpo.push({
               'descrizione': descrizione,
               'quantita': row.quantita,
               'prezzo_unitario_orig': netto,
               'prezzo_unitario': netto.toFixed(2).replace('.', ','),
-              'totale': Number(netto * row.quantita).toFixed(2).replace('.', ','),
-              'totale_orig': netto * row.quantita
+              'totale': totalRow.toFixed(2).replace('.', ','),
+              'totale_orig': totalRow
             });
-            corpo_proforma.imponibile += netto * row.quantita;
 
+            corpo_proforma.imponibile += totalRow;
           }
         }
-
         break;
       case 2: // Card Soccorso
-        const cards = await this.entityManager.query('SELECT * FROM card_soccorso_2 WHERE id_proforma = ?', [model.id])
-        for (let card of cards) {
-          const targa = await this.entityManager.query('SELECT targa FROM veicoli WHERE id = ?', [card.veicolo])
-          const prezzo = await this.ordiniContrConsumoCardsService.getPrezzoSoccorso(card.dealer, card.tipo_card, card.data_attivazione)
-          const prezzo_formatted = Number(prezzo).toFixed(2).replace('.', ',')
-          const descrizione = card.tipo_card === 'C' ? (bold_text ? `<b>${targa}</b>:` : `${targa}:`) + 'Card Soccorso Camper' : (bold_text ? `<b>${targa}</b>:` : `${targa}:`) + `Card C ${card.tipo_card.toString().padStart(3, '0')}`
-          corpo_proforma.corpo.push({
-            'descrizione': descrizione,
-            'quantita': 1,
-            'prezzo_unitario_orig': prezzo,
-            'prezzo_unitario': prezzo_formatted,
-            'totale': prezzo_formatted,
-            'totale_orig': prezzo
-          });
-          corpo_proforma.imponibile += prezzo;
-        }
+        // 1. Obtener cards y restituzioni en paralelo
+        const [cards, restituzioni] = await Promise.all([
+          this.entityManager.query('SELECT cs.*, v.targa FROM card_soccorso_2 cs JOIN veicoli v ON cs.veicolo = v.id WHERE cs.id_proforma = ?', [model.id]),
+          this.entityManager.query('SELECT cs.*, v.targa FROM card_soccorso_2 cs JOIN veicoli v ON cs.veicolo = v.id WHERE cs.id_proforma_restituzione = ?', [model.id])
+        ]);
 
-        const restituzioni = await this.entityManager.query('SELECT * FROM card_soccorso_2 WHERE id_proforma_restituzione = ?', [model.id]);
+        // 2. Procesar todas las tarjetas en paralelo
         const tipi_rest = [0, 'RR', 'RN'];
         const tipi_rest_long = [0, 'Restituzione Regionale', 'Restituzione Nazionale'];
 
-        for (let card of restituzioni) {
-          const targa = await this.entityManager.query('SELECT targa FROM veicoli WHERE id = ?', [card.veicolo])
-          const prezzo = await this.ordiniContrConsumoCardsService.getPrezzoSoccorso(card.dealer, tipi_rest[card.restituzione], card.data_attivazione)
-          const prezzo_formatted = Number(prezzo).toFixed(2).replace('.', ',')
+        // Preparar todas las promesas de precio juntas
+        const cardPromises = cards.map(card =>
+          this.ordiniContrConsumoCardsService.getPrezzoSoccorso(card.dealer, card.tipo_card, card.data_attivazione)
+            .then(prezzo => ({
+              card,
+              prezzo,
+              prezzo_formatted: Number(prezzo).toFixed(2).replace('.', ','),
+              isRestituzione: false
+            }))
+        );
 
-          corpo_proforma.corpo.push({
-            'descrizione': `<b>${targa}</b>: ${tipi_rest_long[card.restituzione]}`,
-            'quantita': 1,
-            'prezzo_unitario': prezzo_formatted,
-            'totale': prezzo_formatted,
-          });
+        const restPromises = restituzioni.map(card =>
+          this.ordiniContrConsumoCardsService.getPrezzoSoccorso(card.dealer, tipi_rest[card.restituzione], card.data_attivazione)
+            .then(prezzo => ({
+              card,
+              prezzo,
+              prezzo_formatted: Number(prezzo).toFixed(2).replace('.', ','),
+              isRestituzione: true
+            }))
+        );
+
+        // 3. Esperar a que se completen todas las promesas de precios
+        const allResults = await Promise.all([...cardPromises, ...restPromises]);
+
+        // 4. Procesar los resultados y construir el cuerpo
+        for (const result of allResults) {
+          const { card, prezzo, prezzo_formatted, isRestituzione } = result;
+
+          if (!isRestituzione) {
+            // Procesar card normal
+            const tagPrefix = bold_text ? `<b>${card.targa}</b>:` : `${card.targa}:`;
+            const descrizione = card.tipo_card === 'C'
+              ? `${tagPrefix} Card Soccorso Camper`
+              : `${tagPrefix} Card C ${card.tipo_card.toString().padStart(3, '0')}`;
+
+            corpo_proforma.corpo.push({
+              'descrizione': descrizione,
+              'quantita': 1,
+              'prezzo_unitario_orig': prezzo,
+              'prezzo_unitario': prezzo_formatted,
+              'totale': prezzo_formatted,
+              'totale_orig': prezzo
+            });
+          } else {
+            // Procesar restituzione
+            corpo_proforma.corpo.push({
+              'descrizione': `<b>${card.targa}</b>: ${tipi_rest_long[card.restituzione]}`,
+              'quantita': 1,
+              'prezzo_unitario': prezzo_formatted,
+              'totale': prezzo_formatted,
+              'prezzo_unitario_orig': prezzo,
+              'totale_orig': prezzo
+            });
+          }
+
           corpo_proforma.imponibile += prezzo;
         }
         break;

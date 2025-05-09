@@ -98,7 +98,7 @@ export class UsersService {
 
         // 3. Buscar en la tabla de dealers
         const [dealer] = await this.entityManager.query(
-            `SELECT d.*, r.name as role_name, d2.password, d2.agente, d2.denominazione
+            `SELECT d.*, r.name as role_name, d2.password, d2.agente, d2.denominazione, d2.attivare
             FROM dealers__contatti d
             INNER JOIN dealers d2 ON d.dealer = d2.id
             LEFT JOIN roles r ON d.role_id = r.id
@@ -116,6 +116,7 @@ export class UsersService {
                 agente: dealer.agente,
                 username: dealer.denominazione,
                 password: dealer.password,
+                active: dealer.attivare
             }, roleName);
         }
 
@@ -132,7 +133,6 @@ export class UsersService {
     }
 
     async checkSiglaAgente(value: string) {
-        console.log('Llega aqui', value)
         const [agenti] = await this.entityManager.query(`
             SELECT EXISTS (
                 SELECT 1 
@@ -141,7 +141,6 @@ export class UsersService {
                 AND stato != 0
             ) AS exists_flag    
         `, [value])
-        console.log('agenti___ ', agenti)
         if (!agenti.exists_flag) {
             throw new NotFoundException(`Agente non trovato.`);
         }
@@ -192,7 +191,7 @@ export class UsersService {
             FROM agenti a 
             WHERE trim(UPPER(sigla)) = trim(UPPER(?))`, [data.agente])
 
-        console.log('agente:::__', agente)
+
         // let mailCc = agente.email
 
         const has_contatto_amministrazione = (data.amministrazione_nome !== '' || data.amministrazione_tel !== '' ||
@@ -396,7 +395,6 @@ export class UsersService {
 
     async notificaDisponibilita(dealer: any) {
         // info@bestdealer.it
-        console.log('dealer___ ', dealer)
         await this.mailService.sendSignUpEmail(dealer.email, 'aetiru@gmail.com', 'aetiru@gmail.com', dealer.denominazione)
 
     }

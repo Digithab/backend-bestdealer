@@ -11,6 +11,7 @@ import { LogService } from 'src/modules/operation/log/log.service';
 import { ProformaService } from 'src/modules/Fatture/proforma/proforma.service';
 import { DisponibilitaPacchettiService } from 'src/modules/Guarantees/disponibilita_pacchetti/disponibilita_pacchetti.service';
 import { Console } from 'console';
+import { WrapperType } from 'src/generate-metadata';
 
 export const OrdiniSearchKeys = [
   'id',
@@ -97,16 +98,13 @@ export class OrdiniPachettiService {
     private logService: LogService,
 
     @Inject(forwardRef(() => ProformaService))
-    private proformaService: ProformaService,
+    private proformaService: WrapperType<ProformaService>,
 
     private disponibilitaPacchettiService: DisponibilitaPacchettiService
 
   ) { }
 
-  async create(createOrdiniPachettiDto: any, userId: string) {
-    const user = await this.validateUser(userId);
-
-    if (user.role !== 'admin') return
+  async create(createOrdiniPachettiDto: any) {
 
     const model = createOrdiniPachettiDto;
 
@@ -141,7 +139,7 @@ export class OrdiniPachettiService {
 
       if (is_saved) {
 
-        await this.logService.create(1, 'pack_gr', is_saved.raw?.insertId, '', model.attributes, user.id)
+        await this.logService.create(1, 'pack_gr', is_saved.raw?.insertId, '', model.attributes, 'default')
 
         // Selezione delle garanzie abilitate per il dealer
         const garanzieAbilitate = await manager.query(`
@@ -186,7 +184,7 @@ export class OrdiniPachettiService {
               .values(prodotto_model)
               .execute();
 
-            await this.logService.create(1, 'pack_gr_qta', prodotto.raw?.insertId, '', prodotto_model.attributes, user.id)
+            await this.logService.create(1, 'pack_gr_qta', prodotto.raw?.insertId, '', prodotto_model.attributes, 'default')
 
             /**
            * Ricerca di tutte le garanzie del tipo `$record->tipo_garanzia` attivate dopo il pack
@@ -256,10 +254,10 @@ export class OrdiniPachettiService {
                   .createQueryBuilder()
                   .update('garanzie')
                   .set(garanzie)
-                  .where('id = :id', { id_garanzie })
+                  .where('id = :id_garanzie', { id_garanzie })
                   .execute();
 
-                await this.logService.create(2, 'garanzie', id_garanzie, old_gr.attributes, garanzie.attributes, user.id)
+                await this.logService.create(2, 'garanzie', id_garanzie, old_gr.attributes, garanzie.attributes, 'default')
 
                 // delete old_gr;
                 // delete garanzie;
@@ -363,10 +361,10 @@ export class OrdiniPachettiService {
                       .createQueryBuilder()
                       .update('garanzie')
                       .set(garanzia)
-                      .where('id = :id', { id_garanzie })
+                      .where('id = :id_garanzie', { id_garanzie })
                       .execute();
 
-                    await this.logService.create(2, 'garanzie', id_garanzie, old_gr.attributes, garanzia.attributes, user.id)
+                    await this.logService.create(2, 'garanzie', id_garanzie, old_gr.attributes, garanzia.attributes, 'default')
                   }
                 }
                 break;
@@ -412,10 +410,10 @@ export class OrdiniPachettiService {
                       .createQueryBuilder()
                       .update('garanzie')
                       .set(garanzia)
-                      .where('id = :id', { id_garanzie })
+                      .where('id = :id_garanzie', { id_garanzie })
                       .execute();
 
-                    await this.logService.create(2, 'garanzie', id_garanzie, old_gr.attributes, garanzia.attributes, user.id)
+                    await this.logService.create(2, 'garanzie', id_garanzie, old_gr.attributes, garanzia.attributes, 'default')
                   }
                 }
                 break;
@@ -562,7 +560,6 @@ export class OrdiniPachettiService {
       .where('dga.dealer = :dealer', { dealer: dealer })
       .andWhere('dga.attivo = 1')
       .getRawMany();
-    console.log('query:___', await query)
     return query
   }
 
@@ -616,13 +613,12 @@ export class OrdiniPachettiService {
     return data;
   }
 
-  async update(id: number, updateOrdiniPachettiDto: any, userId: string) {
+  async update(id: number, updateOrdiniPachettiDto: any) {
+
+    const modelDTO = updateOrdiniPachettiDto
+
     return await this.dataSource.transaction(async (manager) => {
-      const user = await this.validateUser(userId);
 
-      if (user.role !== 'admin') return
-
-      const modelDTO = updateOrdiniPachettiDto
 
       const [model] = await manager.query('SELECT * FROM ordini__pacchetti WHERE id = ?', [id])
 
@@ -960,10 +956,6 @@ export class OrdiniPachettiService {
         return acc;
       }, {} as Record<number, number>);
 
-      console.log('Updated disponibilidad:', updatedDisp);
-      console.log('Disponibilidad by prodotto:', dispByProdotto);
-
-      console.log('disp_extra_after_edit antes:', disp_extra_after_edit);
 
       Object.keys(disp_extra_after_edit).forEach((id: string) => {
         const qta = Array.isArray(disp_extra_after_edit[id])

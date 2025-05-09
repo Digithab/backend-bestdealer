@@ -4,16 +4,18 @@ import { CreateAbbonamentiDto } from './dto/create-abbonamenti.dto';
 import { UpdateAbbonamentiDto } from './dto/update-abbonamenti.dto';
 import { JwtAuthGuard } from 'src/modules/auth/jwt-auth.guard';
 import { ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { RolesGuard } from 'src/modules/auth/roles.guard';
+import { Roles } from 'src/modules/auth/roles.decorator';
 
 @Controller('abbonamenti')
-@UseGuards(JwtAuthGuard) // Asegúrate de proteger estas rutas
+@UseGuards(JwtAuthGuard, RolesGuard) // Asegúrate de proteger estas rutas
 export class AbbonamentiController {
   constructor(private readonly abbonamentiService: AbbonamentiService) { }
 
   @Post()
-  create(@Body() createAbbonamentiDto: any, @Request() req) {
-    const email = req.user.email
-    return this.abbonamentiService.create(createAbbonamentiDto, email);
+  @Roles('admin', 'Super Admin')
+  create(@Body() createAbbonamentiDto: any) {
+    return this.abbonamentiService.create(createAbbonamentiDto);
   }
 
   @Get()
@@ -46,9 +48,9 @@ export class AbbonamentiController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateAbbonamentiDto: any, @Request() req) {
-    const email = req.user.email
-    return this.abbonamentiService.update(+id, updateAbbonamentiDto, email);
+  @Roles('admin', 'Super Admin')
+  update(@Param('id') id: string, @Body() updateAbbonamentiDto: any) {
+    return this.abbonamentiService.update(+id, updateAbbonamentiDto);
   }
 
   @Delete(':id')

@@ -29,9 +29,9 @@ export class JwtAuthGuard implements CanActivate {
         }
       )
 
-      console.log('payload ', payload)
+
       const userName = payload.role === 'agente' ? payload.sigla : payload.email
-      console.log('userName ', userName)
+
       const user = await this.user.findByUsername(userName);
 
       if (!user) {

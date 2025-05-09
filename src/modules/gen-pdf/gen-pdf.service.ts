@@ -104,40 +104,45 @@ export class GenPdfService {
   async generatePdf(templateName: string, data: any): Promise<any> {
     const startTime = Date.now();
     console.log('Generating PDF...', startTime);
-    const { proforma } = data
-    const imponible = proforma['imponibile']
-    const id = proforma['id']
-    const total = Number(imponible + (imponible * 0.22)).toFixed(2).replace('.', ',');
 
-    data.proforma.imponible = Number(imponible).toFixed(2).replace('.', ',');
-    data.proforma.total = total;
+    // Destructurar proforma directamente
+    const { proforma } = data;
+    const { id, imponibile: imponible, scadenze, data: proformaDate, differita, periodo } = proforma;
 
-    if (proforma.scadenze > 0) {
-      const numPayments = parseInt(proforma.scadenze);
-      const totalAmount = parseFloat(total.replace(',', '.'));
-      const amountPerPayment = (totalAmount / numPayments).toFixed(2);
-      const paymentData = [];
+    // Calcular total una sola vez
+    const iva = 0.22;
+    const totalValue = imponible + (imponible * iva);
 
-      // Generate payment array
-      for (let i = 0; i < numPayments; i++) {
-        const baseDate = proforma.data.split('/');
-        const paymentDate = new Date(
-          parseInt(baseDate[2]),    // year
-          parseInt(baseDate[1]) - 1, // month (0-based)
-          parseInt(baseDate[0])     // day
-        );
+    // Actualizar datos usando una copia para evitar modificar el objeto original
+    data = {
+      ...data,
+      proforma: {
+        ...proforma,
+        imponible: Number(imponible).toFixed(2).replace('.', ','),
+        total: totalValue.toFixed(2).replace('.', ',')
+      }
+    };
 
-        // Add months instead of days
-        const differitaMonths = parseInt(proforma.differita) / 30; // Convert days to months
-        const periodoMonths = parseInt(proforma.periodo) / 30;     // Convert days to months
+    // Procesar pagos solo si es necesario
+    if (scadenze > 0) {
+      // Optimizar el cálculo de fechas de pago
+      const numPayments = parseInt(scadenze);
+      const amountPerPayment = (totalValue / numPayments).toFixed(2);
 
-        paymentDate.setMonth(
-          paymentDate.getMonth() +
-          Math.floor(differitaMonths) +
-          Math.floor(periodoMonths * i)
-        );
+      // Parsear la fecha base una sola vez
+      const [day, month, year] = proformaDate.split('/').map(Number);
+      const baseDate = new Date(year, month - 1, day);
 
-        paymentData.push({
+      // Calcular meses de diferimiento y periodo una sola vez
+      const differitaMonths = Math.floor(parseInt(differita) / 30);
+      const periodoMonths = Math.floor(parseInt(periodo) / 30);
+
+      // Generar datos de pago
+      data.scadenze = Array.from({ length: numPayments }, (_, i) => {
+        const paymentDate = new Date(baseDate);
+        paymentDate.setMonth(baseDate.getMonth() + differitaMonths + (periodoMonths * i));
+
+        return {
           numero: i + 1,
           importo: amountPerPayment.replace('.', ','),
           data: paymentDate.toLocaleDateString('it-IT', {
@@ -145,56 +150,68 @@ export class GenPdfService {
             month: '2-digit',
             year: 'numeric'
           })
-        });
-      }
-
-      data.scadenze = paymentData;
+        };
+      });
     }
 
+    // Leer y compilar la plantilla
     const templatePath = path.join(__dirname, '..', '..', 'views', 'views', `${templateName}.hbs`);
     const template = fs.readFileSync(templatePath, 'utf8');
     const compiledTemplate = Handlebars.compile(template);
 
-    // Add logo to data
+    // Añadir logo (considerar cachear esta operación)
     const logoPath = path.join(__dirname, '..', '..', 'assets', 'assets', 'images', 'logo_full.png');
     const logoBase64 = fs.readFileSync(logoPath, 'base64');
     data.logo = `data:image/png;base64,${logoBase64}`;
 
     const html = compiledTemplate(data);
-
     console.log('HTML generated', Date.now() - startTime);
-    console.log('GENERANDO PDF PROFORMA...');
-    const browser = await puppeteer.launch({
-      headless: true,
-      executablePath: require('puppeteer').executablePath(),//'/usr/bin/chromium-browser',
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-gpu',
-        '--disable-web-security',
-        '--disable-extensions',
-        '--disable-dev-shm-usage', // Helps in resource-constrained environments
-        '--remote-debugging-port=9222'
-      ],
-      timeout: 0
-    });
 
-
+    // Reutilizar la instancia de browser para múltiples generaciones de PDF
+    // (Esto podría implementarse a nivel de servicio)
+    let browser;
     try {
-      const page = await browser.newPage();
-      await page.setContent(html);
-      const buffer = await page.pdf({ format: 'A4' });
-      await browser.close();
-      console.log('PDF PROFORMA GENERADO...');
-      // Upload to FTP
-      const remotePath = `/httpdocs/storage/prova/${id}.pdf`;
-      await this.ftpService.uploadFile(buffer, remotePath);
+      browser = await puppeteer.launch({
+        headless: true,
+        executablePath: require('puppeteer').executablePath(),        
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-gpu',
+          '--disable-web-security',
+          '--disable-extensions',
+          '--disable-dev-shm-usage',
+          '--remote-debugging-port=9222'
+        ],
+        timeout: 0
+      });
 
-      console.log(`PDF generation and upload took ${Date.now() - startTime}ms`);
-      return 'PDF SUBIDO';
+      const page = await browser.newPage();
+
+      // Configurar timeouts adecuados
+      await page.setDefaultNavigationTimeout(0);
+      await page.setContent(html, { waitUntil: 'networkidle0' });
+
+      // Generar PDF con opciones optimizadas
+      const buffer = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        margin: { top: '1cm', right: '1cm', bottom: '1cm', left: '1cm' }
+      });
+      console.log(`PDF generation: ${Date.now() - startTime}ms`);
+
+      // Subir a FTP
+      const remotePath = `/httpdocs/storage/prova/proforma/${id}.pdf`;
+      await this.ftpService.uploadFile(buffer, remotePath);
+      console.log(`PDF upload:${Date.now() - startTime}ms`);
+
+      return { success: true, message: 'PDF SUBIDO' };
     } catch (err) {
-      await browser.close();
-      throw err;
+      console.error('Error generando PDF:', err);
+      throw new Error(`Error en generación de PDF: ${err.message}`);
+    } finally {
+      // Siempre cerrar el navegador, incluso si hay errores
+      if (browser) await browser.close();
     }
   }
 

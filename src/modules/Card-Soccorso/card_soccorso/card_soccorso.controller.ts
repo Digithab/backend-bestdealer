@@ -82,11 +82,11 @@ export class CardSoccorsoController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateCardSoccorsoDto: UpdateCardSoccorsoDto, @Request() req
+  @Roles('admin', 'Super Admin')
+  update(@Param('id') id: string, @Body() updateCardSoccorsoDto: UpdateCardSoccorsoDto
   ) {
     
-    const email = req.user.email
-    return this.cardSoccorsoService.update(+id, updateCardSoccorsoDto, email);
+    return this.cardSoccorsoService.update(+id, updateCardSoccorsoDto);
   }
 
   @Delete(':id')
