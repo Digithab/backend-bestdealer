@@ -143,69 +143,76 @@ export class CentriConvenzionatiService {
   }
 
   async dataOfficina() {
-    const officina = await this.getOfficina();
+    // 1. Obtener todas las regiones con centros activos en una sola consulta
+    const regionsQuery = `
+        SELECT DISTINCT c.regione
+        FROM comuni c
+        INNER JOIN centri_convenzionati ce ON ce.comune = c.id
+        WHERE ce.is_deleted = 0
+        ORDER BY c.regione ASC
+    `;
 
-    const result = await Promise.all(officina.map(async (off) => {
-      // Get centers data for the region
-      const data = await this.entityManager.createQueryBuilder()
-        .select([
-          'ce.id as id',
-          'ce.nome as nome',
-          'ce.indirizzo as indirizzo',
-          'ce.cap as cap',
-          'ce.telefono as telefono',
-          'ce.email as email',
-          'co.citta as citta',
-          'co.provincia as provincia',
-          'ce.commento'
-        ])
-        .from('centri_convenzionati', 'ce')
-        .leftJoin('comuni', 'co', 'ce.comune = co.id')
-        .where('ce.is_deleted = 0') // Changed 'in (0)' to '= 0'
-        .andWhere('co.regione LIKE :regione', { regione: `%${off.regione}%` })
-        .orderBy('co.provincia', 'ASC')
-        .getRawMany();
+    const centersQuery = `
+        SELECT 
+            ce.id,
+            ce.nome,
+            ce.indirizzo,
+            ce.cap,
+            ce.telefono,
+            ce.email,
+            co.citta,
+            co.provincia,
+            ce.commento,
+            co.regione
+        FROM centri_convenzionati ce
+        LEFT JOIN comuni co ON ce.comune = co.id
+        WHERE ce.is_deleted = 0
+        ORDER BY co.regione ASC, co.provincia ASC
+    `;
 
-      // Process types for each center in parallel
-      if (data.length > 0) {
-        // Get all centers' IDs in a single array
-        const centerIds = data.map(center => center.id);
+    // 2. Ejecutar ambas queries en paralelo
+    const [regions, centers] = await Promise.all([
+      this.dataSource.query(regionsQuery),
+      this.dataSource.query(centersQuery)
+    ]);
 
-        // Get all types for all centers in one query
-        const typesData = await this.entityManager.createQueryBuilder()
-          .select([
-            'ccat.centro as centerId',
-            'cct.descrizione as descrizione'
-          ])
-          .from('centri_convenzionati__tipi', 'cct')
-          .innerJoin('centri_convenzionati__assoc__tipi', 'ccat', 'cct.id = ccat.tipo')
-          .where('ccat.centro IN (:...centerIds)', { centerIds })
-          .andWhere('ccat.attivo = 1')
-          .getRawMany();
+    // 3. Obtener todos los tipos para todos los centros en una sola consulta
+    const typesQuery = `
+        SELECT 
+            ccat.centro as centerId,
+            cct.descrizione
+        FROM centri_convenzionati__tipi cct
+        INNER JOIN centri_convenzionati__assoc__tipi ccat ON cct.id = ccat.tipo
+        WHERE ccat.attivo = 1 AND ccat.centro IN (?)
+    `;
+    const centerIds = centers.map(center => center.id);
+    const types = await this.dataSource.query(typesQuery, [centerIds]);
 
-        // Create a map of centerIds to their types
-        const centerTypesMap = {};
-        typesData.forEach(type => {
-          if (!centerTypesMap[type.centerId]) {
-            centerTypesMap[type.centerId] = [];
-          }
-          centerTypesMap[type.centerId].push(type.descrizione);
-        });
-
-        // Assign types to each center
-        data.forEach(center => {
-          center.tipo = centerTypesMap[center.id] || [];
-        });
+    // 4. Crear mapa de tipos por centro
+    const typesByCenter = types.reduce((acc, type) => {
+      if (!acc[type.centerId]) {
+        acc[type.centerId] = [];
       }
+      acc[type.centerId].push(type.descrizione);
+      return acc;
+    }, {});
 
-      return {
-        regione: off.regione,
-        count: data.length,
-        data: data,
-      };
+    // 5. Organizar los resultados por región
+    const centersByRegion = centers.reduce((acc, center) => {
+      if (!acc[center.regione]) {
+        acc[center.regione] = [];
+      }
+      center.tipo = typesByCenter[center.id] || [];
+      acc[center.regione].push(center);
+      return acc;
+    }, {});
+
+    // 6. Formatear el resultado final
+    return regions.map(({ regione }) => ({
+      regione,
+      count: centersByRegion[regione]?.length || 0,
+      data: centersByRegion[regione] || []
     }));
-
-    return result;
   }
 
 

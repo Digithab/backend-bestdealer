@@ -63,14 +63,15 @@ export class AgentiService {
     page = Math.max(1, Number(page));
     limit = Math.max(1, Math.min(50, Number(limit)));
     const validOrder = ['ASC', 'DESC'].includes(order) ? order : 'ASC';
-    const sortColumn = AgentiSearchKeys.includes(sort) ? sort : 'id';
+    const sortColumn = AgentiSearchKeys.includes(sort) ? sort : 'sigla';
 
     const query = this.entityManager.createQueryBuilder()
       .select('ag.*, co.citta as comuni, co.provincia as prov')
       .from('agenti', 'ag')
       .innerJoin('comuni', 'co', 'ag.comune = co.id')
-      .orderBy(`ag.sigla`, 'ASC');
+      .orderBy(`ag.sigla`, 'ASC')
 
+    console.log('query ', query)
 
     this.applyFilters(query, search);
 
@@ -81,7 +82,7 @@ export class AgentiService {
 
     // Aplicar ordenación y paginación
     query
-      .orderBy(`ag.${sortColumn}`, validOrder as 'ASC' | 'DESC')
+      .orderBy(`ag.${sortColumn}`, validOrder as 'ASC' | 'ASC')
       .offset((page - 1) * limit)
       .limit(limit);
 

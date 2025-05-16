@@ -304,7 +304,7 @@ export class DealerService {
     page = Math.max(1, Number(page));
     limit = Math.max(1, Math.min(50, Number(limit)));
     const validOrder = ['ASC', 'DESC'].includes(order) ? order : 'ASC';
-    const sortColumn = DealerSearchKeys.includes(sort) ? sort : 'id';
+    const sortColumn = DealerSearchKeys.includes(sort) ? sort : 'denominazione';
 
     const query = this.entityManager.createQueryBuilder()
       .select("d.*, co.citta, co.provincia, a.sigla as sigla, GROUP_CONCAT(DISTINCT tg.denominazione ORDER BY tg.denominazione SEPARATOR ', ') as tipi")

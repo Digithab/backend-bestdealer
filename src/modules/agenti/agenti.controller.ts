@@ -27,44 +27,19 @@ export class AgentiController {
     return this.agentiService.create(createAgentiDto);
   }
 
-  // @Get('search')
-  // async search(
-  //   @Query() search: AgentiSearch,
-  //   @Query('page') page: number = 1,
-  //   @Query('limit') limit: number = 20,
-  // ) {
-
-  //   const { agenti, total } = await this.agentiService.search(search, page, limit)
-
-  //   return {
-  //     data: agenti,
-  //     total: total,
-  //     page: page,
-  //     limit: limit,
-  //     totalPages: Math.ceil(total / limit)
-  //   }
-  // }
-
-  // @Get()
-  // findAll(
-  //   @Query() sort: string,
-  //   @Query('order') order: any,
-  // ) {
-  //   return this.agentiService.findAll(sort, order);
-  // }
 
   @Get()
   @ApiOperation({ summary: 'Get agenti with optional filters and pagination' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'sort', required: false, type: String })
-  @ApiQuery({ name: 'order', required: false, enum: ['ASC', 'DESC'] })
+  @ApiQuery({ name: 'order', required: false, enum: ['ASC', 'ASC'] })
   async getAgenti(
     @Query() search: AgentiSearch,
     @Query('page') page: number,
     @Query('limit') limit: number,
     @Query('sort') sort?: string,
-    @Query('order') order?: 'ASC' | 'DESC'
+    @Query('order') order?: 'ASC' | 'ASC'
   ) {
     const { agenti, total } = await this.agentiService.getAgenti(search, page, limit, sort, order);
 
