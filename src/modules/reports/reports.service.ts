@@ -395,6 +395,78 @@ export class ReportsService {
     return client || { denominazione: null };;
   }
 
+  async getDealerGuasti(dealerId: number) {
+    const [data] = await this.entityManager.query(`
+      SELECT 
+        COUNT(*) as total,
+        SUM(preventivo_riparazione) AS preventivo
+      FROM v_guasti vg 
+      WHERE vg.idDealer = ?
+    `, [dealerId]);
+
+    return data || { total: 0, preventivo: 0 };
+  }
+
+  async getDealerToPay(dealerId: number) {
+    const [data] = await this.entityManager.query(`
+      SELECT 
+        SUM(fatturato) AS fatturato,
+        SUM(saldo) AS saldo
+      FROM v_proforma vp
+      WHERE tipo_cliente = 0
+      AND id_cliente = ?
+    `, [dealerId]);
+
+    return data || { fatturato: 0, saldo: 0 };
+  }
+
+  async getDealerGarantiaStats(dealerId: number) {
+    const data = await this.entityManager.query(`
+      SELECT 
+        COUNT(tipo_garanzia) AS type,
+        tg.denominazione	
+      FROM garanzie g
+      INNER JOIN tipi_garanzie tg ON g.tipo_garanzia = tg.id
+      WHERE dealer = ?
+      AND g.is_deleted = 0
+      GROUP BY 2 
+    `, [dealerId]);
+
+    return data || { type: 0, denominazione: 0 };
+  }
+
+  async getDealerDisponibilityStats(dealerId: number) {
+    try {
+      // Get disponibilita
+      const disponibilita = await this.entityManager.query(`
+            SELECT DISTINCT vdd.disponibilidad_total, tg.id, tg.denominazione
+            FROM v_dealer_disponibilita vdd
+            INNER JOIN tipi_garanzie tg ON tg.id = vdd.prodotto
+            WHERE vdd.dealer = ?
+            ORDER BY tg.denominazione ASC
+        `, [dealerId]);
+
+      // Get acquistati
+      const acquistati = await this.entityManager.query(`
+            SELECT vp.dealer, vp.qnt, tg.id, tg.denominazione
+            FROM view_pack_acquistati_dealer vp
+            INNER JOIN tipi_garanzie tg ON tg.id = vp.prodotto
+            WHERE vp.dealer = ?
+            AND vp.is_extra = 0
+            ORDER BY tg.denominazione ASC
+        `, [dealerId]);
+
+      return {
+        disponibilita: disponibilita || [],
+        acquistati: acquistati || []
+      };
+    } catch (error) {
+      this.logger.error('Error getting dealer stats', error.stack);
+      throw error;
+    }
+  }
+
+
   private async getWarrantyPrice(dealer: number, type: any, date: string) {
     const contract = await this.getPrezzoGaranzia(dealer, type, date);
     return contract || 0;
@@ -654,6 +726,108 @@ export class ReportsService {
       return Number(tipoGaranzia?.prezzo_listino);
     } else {
       return Number(queryResult.prz)
+    }
+  }
+
+  async getProformaTotals(year?: number) {
+    try {
+      const query = `
+            SELECT 
+                COUNT(1) as total,
+                COALESCE(SUM(vp.importo), 0) as importo_total,
+                COALESCE(SUM(vp.incasso), 0) as incaso_total,
+                COALESCE(SUM(vp.saldo), 0) as saldo_total
+            FROM v_proforma vp
+            WHERE vp.is_deleted = 0
+            ${year ? 'AND YEAR(vp.data_proforma) = ?' : ''}
+        `;
+
+      const params = year ? [year] : [];
+      const [totals] = await this.entityManager.query(query, params);
+
+      return {
+        total: parseInt(totals.total),
+        importo_total: parseFloat(totals.importo_total),
+        incaso_total: parseFloat(totals.incaso_total),
+        saldo_total: parseFloat(totals.saldo_total)
+      };
+    } catch (error) {
+      this.logger.error('Error getting proforma totals', error.stack);
+      throw error;
+    }
+  }
+
+  async getProformaMonthlyTotals(year: number) {
+    try {
+      const query = `
+            SELECT 
+                MONTH(vp.data_proforma) as month,
+                COUNT(1) as total,
+                COALESCE(SUM(vp.importo), 0) as importo_total,
+                COALESCE(SUM(vp.incasso), 0) as incaso_total,
+                COALESCE(SUM(vp.saldo), 0) as saldo_total
+            FROM v_proforma vp
+            WHERE vp.is_deleted = 0
+            AND YEAR(vp.data_proforma) = ?
+            GROUP BY MONTH(vp.data_proforma)
+            ORDER BY MONTH(vp.data_proforma)
+        `;
+
+      const monthlyTotals = await this.entityManager.query(query, [year]);
+
+      // Asegurar que tenemos todos los meses, incluso los que no tienen datos
+      const allMonths = Array.from({ length: 12 }, (_, i) => {
+        const existingMonth = monthlyTotals.find(m => m.month === (i + 1));
+        return existingMonth || {
+          month: i + 1,
+          total: 0,
+          importo_total: 0,
+          incaso_total: 0,
+          saldo_total: 0
+        };
+      });
+
+      return allMonths.map(month => ({
+        month: month.month,
+        total: parseInt(month.total),
+        importo_total: parseFloat(month.importo_total),
+        incaso_total: parseFloat(month.incaso_total),
+        saldo_total: parseFloat(month.saldo_total)
+      }));
+    } catch (error) {
+      this.logger.error('Error getting monthly proforma totals', error.stack);
+      throw error;
+    }
+  }
+
+  async getGaranziasYearlyStats(year?: number) {
+    try {
+      const query = `
+            SELECT 
+                YEAR(data_inserimento) as year,
+                tipo_garanzia,
+                tg.denominazione,
+                COUNT(*) as cantidad
+            FROM garanzie g
+            INNER JOIN tipi_garanzie tg ON tg.id = g.tipo_garanzia
+            WHERE g.is_deleted = 0
+            ${year ? 'AND YEAR(data_inserimento) = ?' : ''}
+            GROUP BY YEAR(data_inserimento), tipo_garanzia, tg.denominazione
+            ORDER BY year DESC, tipo_garanzia
+        `;
+
+      const params = year ? [year] : [];
+      const stats = await this.entityManager.query(query, params);
+
+      return stats.map(stat => ({
+        year: parseInt(stat.year),
+        tipo_garanzia: parseInt(stat.tipo_garanzia),
+        denominazione: stat.denominazione,
+        cantidad: parseInt(stat.cantidad)
+      }));
+    } catch (error) {
+      this.logger.error('Error getting yearly garantias stats', error.stack);
+      throw error;
     }
   }
 }

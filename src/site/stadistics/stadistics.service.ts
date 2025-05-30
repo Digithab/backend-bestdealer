@@ -331,6 +331,8 @@ export class StadisticsService {
     return stats.reduce((total, item) => total + Number(item.total_venduto), 0);
   }
 
+  // Statistcs dealer
+  
 
 
 

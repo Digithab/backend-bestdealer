@@ -59,4 +59,54 @@ export class ReportsController {
     console.log('data___ ', data)
     return this.reportsService.generateExcel(data, res);
   }
+
+  @Get('dealer/guasti/:id')
+  async getDealerGuasti(
+    @Param('id') id: number,
+  ) {
+    console.log('id___ ', id)
+    return this.reportsService.getDealerGuasti(id);
+  }
+
+  @Get('dealer/toPay/:id')
+  async getDealerToPay(
+    @Param('id') id: number,
+  ) {
+    return this.reportsService.getDealerToPay(id);
+  }
+
+  @Get('dealer/AllGarantia/:id')
+  async getDealerGarantiaStats(
+    @Param('id') id: number,
+  ) {
+    return this.reportsService.getDealerGarantiaStats(id);
+  }
+
+  @Get('dealer/stats/:id')
+  async getDealerDisponibilityStats(
+    @Param('id') id: number
+  ) {
+    return this.reportsService.getDealerDisponibilityStats(id);
+  }
+
+  @Get('proforma/totals')
+  async getProformaTotals(
+    @Query('year') year?: number
+  ) {
+    return this.reportsService.getProformaTotals(year);
+  }
+
+  @Get('proforma/monthly-totals')
+  async getProformaMonthlyTotals(
+    @Query('year') year: number
+  ) {
+    return this.reportsService.getProformaMonthlyTotals(year);
+  }
+
+  @Get('garantias/yearly-stats')
+  async getGaranziasYearlyStats(
+    @Query('year') year?: number
+  ) {
+    return this.reportsService.getGaranziasYearlyStats(year);
+  }
 }

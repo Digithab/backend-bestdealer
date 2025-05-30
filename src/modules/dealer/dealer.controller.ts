@@ -219,4 +219,5 @@ export class DealerController {
   ) {
     return this.dealerService.updateDealerStatus(id, attivare);
   }
+
 }

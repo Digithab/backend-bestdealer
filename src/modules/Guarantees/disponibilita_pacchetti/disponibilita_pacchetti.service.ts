@@ -183,8 +183,6 @@ ORDER BY
       [dealer, tipo_extra]
     )
 
-
-
     // Check if result exists and has at least one row
     if (!result || result.length === 0) {
       return 0
