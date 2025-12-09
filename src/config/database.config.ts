@@ -11,7 +11,7 @@ export const typeOrmConfig: TypeOrmModuleOptions = {
     database: process.env.DB_NAME,
     entities: [], // Dejamos esto vacío ya que no usaremos entidades
     synchronize: false, // Importante: esto evita que TypeORM modifique tu esquema
-    logging: false, // Opcional: muestra las consultas SQL en la consola
+    logging: true, // Opcional: muestra las consultas SQL en la consola
     // Configuración mejorada de reconexión
     retryAttempts: 5, // Intentar reconectar indefinidamente
     retryDelay: 3000,

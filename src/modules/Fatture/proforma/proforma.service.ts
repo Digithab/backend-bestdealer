@@ -368,7 +368,8 @@ export class ProformaService {
         operazione: 2,
         record_table: 'proforma',
         record_id: id,
-        user: 'default'
+        user: 'default',
+        date_time: new Date() // Solo agrega esta línea
       }
 
       await manager

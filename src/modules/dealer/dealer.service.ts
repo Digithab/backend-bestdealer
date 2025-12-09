@@ -20,8 +20,8 @@ export const DealerSearchKeys = [
   'soccorso__num_traini',
   'indirizzo',
   'cap',
-  'comune',
-  'prov',
+  'citta',
+  'provincia',
   'sigla'
 ]
 
@@ -584,12 +584,17 @@ export class DealerService {
         if (key === 'sigla') {
           query.andWhere(`a.${key} = :${key}`, { [key]: value });
         }
-
+        if (key === 'citta') {
+          query.andWhere(`co.${key} = :${key}`, { [key]: value });
+        }
+        if (key === 'provincia') {
+          query.andWhere(`co.${key} = :${key}`, { [key]: value });
+        }
         if (key === 'tipo_persona' && value !== undefined) {
           query.andWhere(`d.tipo_persona = :${key}`, { [key]: this.type(value) });
         }
 
-        if (typeof value === 'string' && key !== 'sigla' && key !== 'tipo_persona') {
+        if (typeof value === 'string' && key !== 'sigla' && key !== 'tipo_persona' && key !== 'citta' && key !== 'provincia') {
           query.andWhere(`d.${key} LIKE :${key}`, { [key]: `%${value}%` });
         } else if (typeof value === 'number') {
           query.andWhere(`d.${key} = :${key}`, { [key]: value });

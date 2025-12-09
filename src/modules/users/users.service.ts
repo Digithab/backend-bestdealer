@@ -141,9 +141,13 @@ export class UsersService {
                 AND stato != 0
             ) AS exists_flag    
         `, [value])
+
+        console.log('agenti.exists_flag: ', agenti.exists_flag)
         if (!agenti.exists_flag) {
             throw new NotFoundException(`Agente non trovato.`);
         }
+
+        return agenti.exists_flag
     }
 
     async isEmailRespUsata(value: string) {
@@ -156,21 +160,30 @@ export class UsersService {
             ) AS exists_flag
         `, [value])
 
-        if (!email.exists_flag) {
+        const { exists_flag } = email
+        console.log('exists_flag: ', exists_flag)
+        if (exists_flag === 1) {
             throw new NotFoundException(`Email già in uso..`);
         }
+
+        return exists_flag
     }
 
     async singup(data: any) {
         let status = false
         let mailTo = null
 
-        await this.checkSiglaAgente(data.agente)
+        console.log('data: ', data)
+        console.log('data.agente; ', data.agente)
+        const is = await this.checkSiglaAgente(data.agente)
 
-        if (data.email != "") {
-            await this.isEmailRespUsata(data.email)
+        console.log('is: ', is)
 
-        }
+        // if (data.email != "") {
+        const err = await this.isEmailRespUsata(data.email)
+
+        console.log('err: ', err)
+        // }
 
         const PREZZI_DEFAULT_EXTRA = {
             soccorso_40km: '20.00',
@@ -187,10 +200,13 @@ export class UsersService {
             rest_regionale: '28.00',
             rest_nazionale: '38.00',
         };
-        const [agente] = await this.entityManager.query(`SELECT * 
-            FROM agenti a 
-            WHERE trim(UPPER(sigla)) = trim(UPPER(?))`, [data.agente])
 
+        const [agente] = await this.entityManager.query(`
+            SELECT * 
+            FROM agenti a 
+            WHERE trim(UPPER(sigla)) = trim(UPPER(?))`,
+            [data.agente]
+        )
 
         // let mailCc = agente.email
 
