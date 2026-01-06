@@ -401,10 +401,19 @@ export class ProformaService {
       switch (model.tipo_proforma) {
         case 0: // Garanzie
 
-          const garanzie = await manager.query('SELECT * FROM garanzie WHERE id_proforma = ?', [model.id])
-          const soccorsi = await manager.query('SELECT * FROM garanzie WHERE id_proforma_soccorso = ?', [model.id])
+          const allGaranzie = await manager.query(`
+            SELECT *, 'garanzia' as tipo FROM garanzie WHERE id_proforma = ?
+            UNION ALL
+            SELECT *, 'soccorso' as tipo FROM garanzie WHERE id_proforma_soccorso = ?
+            UNION ALL
+            SELECT *, 'autosost' as tipo FROM garanzie WHERE id_proforma_autosost = ?
+          `, [model.id, model.id, model.id]);
 
-          const autosost = await manager.query('SELECT * FROM garanzie WHERE id_proforma_autosost = ?', [model.id])
+          // Separar por tipo
+          const garanzie = allGaranzie.filter(g => g.tipo === 'garanzia');
+          const soccorsi = allGaranzie.filter(g => g.tipo === 'soccorso');
+          const autosost = allGaranzie.filter(g => g.tipo === 'autosost');
+
           let total = 0;
           try {
             const prices = await Promise.all(

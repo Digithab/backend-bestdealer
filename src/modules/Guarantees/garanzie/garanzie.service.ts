@@ -1058,6 +1058,8 @@ WHERE id = ?;
 
     const tipi_garanzie = await this.entityManager.query('select * from tipi_garanzie')
 
+    console.log('Tipos de garantías obtenidos:', tipi_garanzie);
+
     const prodotti = all_disponibilita.map(d => {
       const prod = prod_acquistati.find(p => p.dealer === d.dealer && p.prodotto === d.prodotto)
       return {
@@ -1067,10 +1069,16 @@ WHERE id = ?;
       }
     })
 
+    console.log('prodotti: ', prodotti);
+
+
     contatti.slice(1, 3).forEach(contatto => {
       const email = contatto?.email;
       if (email) cc.push(email);
     });
+
+    console.log('Proceso de envio de correos');
+
 
 
     await this.mailService.sendGarantiasEmail('aetiru@gmail.com', 'aetiru@gmail.com', 'aetiru@gmail.com', prodotti, denominazione);
