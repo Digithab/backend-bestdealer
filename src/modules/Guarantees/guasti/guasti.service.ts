@@ -103,7 +103,10 @@ export class GuastiService {
 
     const noteValid = !note ? file.originalname : note
 
-    const estensione = estensione_file === null || estensione_file === undefined ? "" : estensione_file[0]
+    console.log('estensione_file: ', estensione_file);
+
+
+    const estensione = !estensione_file || estensione_file === null || estensione_file === undefined ? "" : estensione_file[0]
 
     console.log('estensione_file___ ', estensione)
     const insertedRicambi = await this.dataSource.transaction(async (manager) => {
@@ -230,12 +233,12 @@ export class GuastiService {
 
   async findOne(id: number) {
     try {
-      const data = await this.dataSource.query(
+      const [data] = await this.dataSource.query(
         `SELECT * FROM guasti g        
-        WHERE g.id = ? AND g.is_deleted = 0`, [id]
+        WHERE g.id = ? AND g.is_deleted = 0 LIMIT 1`, [id]
       );
 
-      return data[0]
+      return data
     } catch (error) {
       console.log(error)
     }
