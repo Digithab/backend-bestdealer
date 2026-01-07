@@ -209,9 +209,15 @@ export class OrdiniPachettiService {
           * Successivamente, la funzione Proforma::recalcTotaleProforma 
           * valuterà quali di queste rientrano nel pack e quali no
           */
-            proforma_da_rigenerare = garanzie_to_edit
+            // proforma_da_rigenerare = garanzie_to_edit
+            //   .map(garantia => garantia.id_proforma)
+            //   .filter(id => id !== null && id !== undefined);
+            proforma_da_rigenerare.push(...garanzie_to_edit
               .map(garantia => garantia.id_proforma)
-              .filter(id => id !== null && id !== undefined);
+              .filter(id => id !== null && id !== undefined)
+            );
+
+            console.log('proforma_da_rigenerare: ', proforma_da_rigenerare);
 
             /**
              * @var int $qta_residua Quantità residua di garanzie che è possibile scalare da questo pack
@@ -329,9 +335,14 @@ export class OrdiniPachettiService {
                   .limit(extra_model.quantita + extra_model.omaggio)
                   .getRawMany();
 
-                proforma_da_rigenerare = garanzie_to_edit
+                // proforma_da_rigenerare = garanzie_to_edit
+                //   .map(garantia => garantia.id_proforma_soccorso)
+                //   .filter(id => id !== null && id !== undefined);
+
+                proforma_da_rigenerare.push(...garanzie_to_edit
                   .map(garantia => garantia.id_proforma_soccorso)
-                  .filter(id => id !== null && id !== undefined);
+                  .filter(id => id !== null && id !== undefined)
+                );
 
                 /**
              * @var int $qta_residua Quantità residua di questo extra che è possibile scalare da questo pack
@@ -383,10 +394,13 @@ export class OrdiniPachettiService {
                   .limit(extra_model.quantita + extra_model.omaggio)
                   .getRawMany();
 
-                proforma_da_rigenerare = garanzie_to_edit_auto
+                // proforma_da_rigenerare = garanzie_to_edit_auto
+                //   .map(garantia => garantia.id_proforma)
+                //   .filter(id => id !== null && id !== undefined);
+                proforma_da_rigenerare.push(...garanzie_to_edit_auto
                   .map(garantia => garantia.id_proforma)
-                  .filter(id => id !== null && id !== undefined);
-
+                  .filter(id => id !== null && id !== undefined)
+                );
                 let qta_extra_resid = extra_model.quantita + extra_model.omaggio;
                 for (let garanzia of garanzie_to_edit_auto) {
                   if (qta_extra_resid > 0) {
@@ -465,8 +479,16 @@ export class OrdiniPachettiService {
           .where('id = :id', { id: is_saved.raw?.insertId })
           .execute();
 
+        console.log('proforma_da_rigenerare: ', proforma_da_rigenerare);
+
         const uniqueProforma = new Set(proforma_da_rigenerare);
+
+        console.log('uniqueProforma: ', uniqueProforma);
+
         for (const idProformaRegen of uniqueProforma) {
+
+          console.log('Rigenerando proforma ID:', idProformaRegen);
+
           await this.proformaService.recalcTotaleProforma(idProformaRegen)
           //await this.proformaService.recalcTotaleProforma(insertedProforma[0].id)
           //Proforma.genPdfProforma(idProformaRegen, this);

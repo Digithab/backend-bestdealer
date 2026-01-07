@@ -81,14 +81,13 @@ export class DisponibilitaPacchettiService {
           SUM(CASE WHEN vd.prodotto = 5 THEN vd.disponibilidad_total ELSE 0 END) AS "GEST_B",
           SUM(CASE WHEN vd.prodotto = 6 THEN vd.disponibilidad_total ELSE 0 END) AS "GEST_C",
           SUM(CASE WHEN vd.prodotto = 7 THEN vd.disponibilidad_total ELSE 0 END) AS "GEST_wD",
-          SUM(CASE WHEN vd.prodotto = 8 THEN vd.disponibilidad_total ELSE 0 END) AS "DDC",
-          vd.valid
+          SUM(CASE WHEN vd.prodotto = 8 THEN vd.disponibilidad_total ELSE 0 END) AS "DDC"          
         FROM view_pack_acquistati vpa
         JOIN dealers d ON vpa.dealer = d.id
         JOIN agenti a ON d.agente = a.id
         LEFT JOIN v_dealer_disponibilita vd ON vd.dealer = d.id
         ${whereClause}
-        GROUP BY d.id, d.denominazione, a.sigla, a.denominazione, vpa.cnt, vd.dealer, vd.valid
+        GROUP BY d.id, d.denominazione, a.sigla, a.denominazione, vpa.cnt, vd.dealer
         ORDER BY d.denominazione
         LIMIT ${validLimit} OFFSET ${offset}
       `;
@@ -302,7 +301,7 @@ ORDER BY
           this.entityManager.query('select * from v_dealer_disponibilita WHERE dealer = ?', [id_dealers]),
           this.entityManager.query('select * from tipi_garanzie')
         ]);
-        
+
         const prodotti = all_disponibilita.map(d => {
           const prod = prod_acquistati.find(p => p.dealer === d.dealer && p.prodotto === d.prodotto)
           return {

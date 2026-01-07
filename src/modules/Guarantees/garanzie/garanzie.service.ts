@@ -1085,6 +1085,7 @@ WHERE id = ?;
 
   }
 
+
   async genPdfGaranzia(id: any) {
     const queries = [
       'SELECT * FROM garanzie WHERE id = ?',

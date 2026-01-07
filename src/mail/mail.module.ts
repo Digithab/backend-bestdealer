@@ -16,7 +16,7 @@ require('dotenv').config();
         FtpServiceModule,
         BullModule.forRoot({
             redis: {
-                host: 'localhost', // 10.114.0.4 - localhost
+                host: '10.114.0.4', // 10.114.0.4 - localhost
                 port: 6379,
                 maxRetriesPerRequest: null,
                 enableReadyCheck: false,
