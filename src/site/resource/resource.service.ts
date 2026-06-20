@@ -1,4 +1,8 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateResourceDto } from './dto/create-resource.dto';
 import { UpdateResourceDto } from './dto/update-resource.dto';
 import { DataSource, EntityManager } from 'typeorm';
@@ -9,7 +13,6 @@ import { FtpServiceService } from 'src/ftp-service/ftp-service.service';
 
 @Injectable()
 export class ResourceService {
-
   constructor(
     @InjectEntityManager() private entityManager: EntityManager,
 
@@ -17,18 +20,19 @@ export class ResourceService {
 
     private usersService: UsersService,
 
-    private ftpServiceService: FtpServiceService
-  ) { }
+    private ftpServiceService: FtpServiceService,
+  ) {}
 
   async getAgenti() {
     try {
-      const agenti = await this.dataSource.createQueryBuilder()
+      const agenti = await this.dataSource
+        .createQueryBuilder()
         .select('a.id as value, a.sigla as label')
         .from('agenti', 'a')
         .orderBy('a.sigla')
         .getRawMany();
 
-      return agenti
+      return agenti;
     } catch (error) {
       console.error('Error fetching agenti:', error);
       throw new Error('Failed to fetch agenti');
@@ -37,13 +41,14 @@ export class ResourceService {
 
   async getAgentiDenomizacione() {
     try {
-      const agenti = await this.dataSource.createQueryBuilder()
+      const agenti = await this.dataSource
+        .createQueryBuilder()
         .select('a.id as value, a.denominazione as label')
         .from('agenti', 'a')
         .orderBy('a.sigla')
         .getRawMany();
 
-      return agenti
+      return agenti;
     } catch (error) {
       console.error('Error fetching agenti:', error);
       throw new Error('Failed to fetch agenti');
@@ -90,17 +95,13 @@ export class ResourceService {
   async getClienti() {
     const clienti = await this.dataSource.query(`
       SELECT c.id as value, c.denominazione as label , c.* FROM clienti c
-      `
-    )
+      `);
 
-    return clienti
+    return clienti;
   }
 
-
   async findByClienti(search: string, client_type?: any) {
-    console.log('client_type___ ', client_type)
-    console.log('search___ ', search)
-    let query: any
+    let query: any;
     let params: any[] = [];
 
     query = `
@@ -126,129 +127,127 @@ export class ResourceService {
       const searchTerm = search.trim();
 
       if (/^\d+$/.test(searchTerm)) {
-
         query += ' WHERE id = ? OR denominazione LIKE ?';
         params.push(searchTerm, `%${searchTerm}%`);
       } else {
-
         query += ' WHERE denominazione LIKE ?';
         params.push(`%${searchTerm}%`);
       }
 
       query += ' LIMIT 50';
-
     }
-    console.log('query__ ', query)
-    const items = await this.entityManager.query(
-      query, params
-    )
+
+    const items = await this.entityManager.query(query, params);
 
     return items;
   }
 
   async dealersVenditori(dealer: string) {
-    const venditore = await this.dataSource.query(`
+    const venditore = await this.dataSource.query(
+      `
       SELECT dv.id as value , dv.nome as label FROM dealers__venditori dv
-      WHERE dealer = ?  
-    `, [dealer]
-    )
+      WHERE dealer = ?
+    `,
+      [dealer],
+    );
 
-    return venditore
+    return venditore;
   }
 
   async getMarca() {
     const marca = await this.dataSource.query(`
-      SELECT vm.id as value, vm.nome as label FROM veicoli__marche vm 
-      `)
+      SELECT vm.id as value, vm.nome as label FROM veicoli__marche vm
+      `);
 
-    return marca
+    return marca;
   }
 
   async getModelo(marca: string) {
-    const modello = await this.dataSource.query(`
-      SELECT vm.id as value, vm.nome as label, vm.* FROM veicoli__modelli vm 
-      WHERE vm.marca = ?  
-    `, [marca])
+    const modello = await this.dataSource.query(
+      `
+      SELECT vm.id as value, vm.nome as label, vm.* FROM veicoli__modelli vm
+      WHERE vm.marca = ?
+    `,
+      [marca],
+    );
 
-    return modello
+    return modello;
   }
 
   async getFornitori() {
     const fornitori = await this.dataSource.query(`
       SELECT f.id as value, f.denominazione as label FROM fornitori f
-      `)
+      `);
 
-    return fornitori
+    return fornitori;
   }
 
   // TODO #1 paginar
   async getDealers() {
     const dealers = await this.dataSource.query(`
       SELECT f.id as value, f.denominazione as label FROM dealers f ORDER BY f.id DESC
-      `)
+      `);
 
-    return dealers
+    return dealers;
   }
 
   async GaranzieDealer(dealer: any) {
-    const garanzie = await this.dataSource.query(`
-      select 
+    const garanzie = await this.dataSource.query(
+      `
+      select
       tg.id,
-      tg.denominazione 
-      from dealers__garanzie_abilitate dg       
-      join tipi_garanzie tg ON dg.tipo_garanzia = tg.id 
+      tg.denominazione
+      from dealers__garanzie_abilitate dg
+      join tipi_garanzie tg ON dg.tipo_garanzia = tg.id
       where dg.dealer = ?
-      and dg.attivo = 1  
-    `, [dealer]
-    )
+      and dg.attivo = 1
+    `,
+      [dealer],
+    );
 
-    return garanzie
+    return garanzie;
   }
 
   async typeGaranties(id: any) {
-
     const [result] = await this.dataSource.query(
       `SELECT id, denominazione, prezzo_listino FROM tipi_garanzie WHERE id = ?`,
-      [id]
+      [id],
     );
 
     return result || null;
   }
 
   async updatePrezzo(id: string, prezzo: any) {
-
-    const result = await this.dataSource.createQueryBuilder()
+    const result = await this.dataSource
+      .createQueryBuilder()
       .update('tipi_garanzie')
       .set({ prezzo_listino: prezzo })
       .where('id = :id', { id })
       .execute();
 
-    return result
+    return result;
   }
 
   async uploadFile(data: any, userId: string) {
-
     const user = await this.validateUser(userId);
 
     if (user.role !== 'admin') {
       throw new ForbiddenException('No tienes permisos para crear garantías');
     }
 
-    const { id, file } = data
+    const { id, file } = data;
     const base64String = file.buffer.toString('base64');
 
     const buffer = Buffer.from(base64String, 'base64');
 
-    console.log('uploading file....')
+    console.log('uploading file....');
     const remotePath = `/httpdocs/storage/prova/${id}.pdf`;
     await this.ftpServiceService.uploadFile(buffer, remotePath);
     console.log('File upload 200!!');
-
   }
 
   private validateUser(email: string): Promise<User | any> {
-
-    const user = this.usersService.findByUsername(email)
+    const user = this.usersService.findByUsername(email);
 
     if (!user) throw new NotFoundException('Usuario no encontrado');
 

@@ -1,0 +1,49 @@
+services:
+  bst-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      - db
+    ports:
+      - '4080:4080'
+    environment:
+      DB_HOST: bst-db
+      DB_PORT: 3306
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      UPLOADS_PATH: /usr/src/app/uploads
+      MAIL_USER: ${MAIL_USER}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+    volumes:
+      - '/home/user/uploads:/usr/src/app/uploads'
+    networks:
+      - bestdealer
+
+  bst-db:
+    image: 'mariadb:10.6'
+    restart: always
+    mem_limit: 512m
+    mem_reservation: 256m
+    command: >
+      --innodb-buffer-pool-size=128M
+      --innodb-log-file-size=32M
+      --max-connections=50
+      --performance-schema=OFF
+    environment:
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    volumes:
+      - 'db_data:/var/lib/mysql'
+    networks:
+      - bestdealer
+
+volumes:
+  db_data:
+
+networks:
+  bestdealer:

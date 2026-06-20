@@ -1,0 +1,51 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - db
+    ports:
+      - '4080:4080'
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USERNAME: ${DB_USERNAME:-3Pn4A4bab6}
+      DB_PASSWORD: ${DB_PASSWORD:-2Az1Ht%0y1mos}
+      DB_NAME: ${DB_NAME:-BDA_DEV}
+      UPLOADS_PATH: /usr/src/app/uploads
+      MAIL_USER: ${MAIL_USER:-dev@digithab.com}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-8B-EaQt2cpE8aq5}
+    volumes:
+      - './uploads:/usr/src/app/uploads'
+    networks:
+      - bestdealer
+
+  db:
+    image: 'mariadb:10.6'
+    restart: unless-stopped
+    mem_limit: 512m
+    mem_reservation: 256m
+    command: >
+      --innodb-buffer-pool-size=128M
+      --innodb-log-file-size=32M
+      --max-connections=50
+      --performance-schema=OFF
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-BDA_DEV}
+      MYSQL_USER: ${DB_USERNAME:-3Pn4A4bab6}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-2Az1Ht%0y1mos}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootlocal123}
+    ports:
+      - '3306:3306'
+    volumes:
+      - 'db_data:/var/lib/mysql'
+    networks:
+      - bestdealer
+
+volumes:
+  db_data:
+
+networks:
+  bestdealer:
